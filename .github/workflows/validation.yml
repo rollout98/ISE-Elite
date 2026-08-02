@@ -1,0 +1,48 @@
+name: Repository Validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(find . -type f -name '*.json' -not -path './.git/*')
+          if [ -n "$files" ]; then
+            while IFS= read -r file; do jq empty "$file"; done <<< "$files"
+          fi
+
+      - name: Validate YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import pathlib, yaml
+          for pattern in ('*.yml', '*.yaml'):
+              for path in pathlib.Path('.').rglob(pattern):
+                  if '.git' not in path.parts:
+                      yaml.safe_load(path.read_text(encoding='utf-8'))
+          PY
+
+      - name: Check ADR naming
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=$(find docs/adr -maxdepth 1 -type f -name 'ADR-*.md' ! -regex '.*/ADR-[0-9][0-9][0-9]-[a-z0-9-]*\.md' || true)
+          if [ -n "$bad" ]; then
+            echo "Invalid ADR names:"
+            echo "$bad"
+            exit 1
+          fi
