@@ -1,0 +1,33 @@
+name: Engineering task
+description: Track implementation work tied to an approved requirement or architecture decision.
+title: "[Engineering] "
+labels: ["engineering"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: State the measurable outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements and references
+      description: Link the applicable requirement, ADR, or design section.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List deterministic conditions for completion.
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Test plan
+      description: Describe unit, integration, replay, and performance tests as applicable.
+    validations:
+      required: true
