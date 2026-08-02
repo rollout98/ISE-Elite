@@ -6,6 +6,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISE.Core", "src/ISE.Core/IS
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISE.Core.Tests", "tests/ISE.Core.Tests/ISE.Core.Tests.csproj", "{6EE4BA45-3B44-4DB2-A723-E1AA274C32B2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISE.Session", "src/ISE.Session/ISE.Session.csproj", "{A0B996E8-23B5-4AB8-9C12-7D88FA6B48AA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISE.Session.Tests", "tests/ISE.Session.Tests/ISE.Session.Tests.csproj", "{E186A75C-241D-4890-A97D-EDC8E2017971}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,5 +24,13 @@ Global
 		{6EE4BA45-3B44-4DB2-A723-E1AA274C32B2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6EE4BA45-3B44-4DB2-A723-E1AA274C32B2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6EE4BA45-3B44-4DB2-A723-E1AA274C32B2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A0B996E8-23B5-4AB8-9C12-7D88FA6B48AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0B996E8-23B5-4AB8-9C12-7D88FA6B48AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0B996E8-23B5-4AB8-9C12-7D88FA6B48AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0B996E8-23B5-4AB8-9C12-7D88FA6B48AA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E186A75C-241D-4890-A97D-EDC8E2017971}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E186A75C-241D-4890-A97D-EDC8E2017971}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E186A75C-241D-4890-A97D-EDC8E2017971}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E186A75C-241D-4890-A97D-EDC8E2017971}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
