@@ -15,6 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
       - name: Validate JSON
         shell: bash
         run: |
@@ -46,3 +51,12 @@ jobs:
             echo "$bad"
             exit 1
           fi
+
+      - name: Restore
+        run: dotnet restore ISE-Elite.sln
+
+      - name: Build
+        run: dotnet build ISE-Elite.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test ISE-Elite.sln --configuration Release --no-build
