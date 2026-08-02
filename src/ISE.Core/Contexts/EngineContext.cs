@@ -7,6 +7,15 @@ namespace ISE.Core.Contexts;
 /// </summary>
 public abstract class EngineContext
 {
+    /// <summary>
+    /// Initializes the common metadata required by every engine context.
+    /// </summary>
+    /// <param name="contextId">Unique identifier for this context instance.</param>
+    /// <param name="correlationId">Identifier used to trace related contexts through the processing pipeline.</param>
+    /// <param name="tradingDayId">Logical trading-day identifier assigned by the Session Engine.</param>
+    /// <param name="timestampUtc">UTC timestamp at which the context was produced.</param>
+    /// <param name="engineVersion">Version of the engine that produced the context.</param>
+    /// <param name="configurationVersion">Version of the configuration used to produce the context.</param>
     protected EngineContext(
         Guid contextId,
         Guid correlationId,
@@ -30,10 +39,21 @@ public abstract class EngineContext
         ConfigurationVersion = configurationVersion;
     }
 
+    /// <summary>Gets the unique identifier for this context instance.</summary>
     public Guid ContextId { get; }
+
+    /// <summary>Gets the identifier that correlates this context with related processing events.</summary>
     public Guid CorrelationId { get; }
+
+    /// <summary>Gets the logical trading-day identifier supplied by the Session Engine.</summary>
     public string TradingDayId { get; }
+
+    /// <summary>Gets the UTC timestamp at which this context was produced.</summary>
     public DateTime TimestampUtc { get; }
+
+    /// <summary>Gets the version of the engine that produced this context.</summary>
     public string EngineVersion { get; }
+
+    /// <summary>Gets the configuration version used to produce this context.</summary>
     public string ConfigurationVersion { get; }
 }
