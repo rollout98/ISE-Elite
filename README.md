@@ -1,1 +1,5 @@
-# ISE-Elite
+# ISE Elite
+
+Commercial Trading Operating System
+
+Repository initialized.
