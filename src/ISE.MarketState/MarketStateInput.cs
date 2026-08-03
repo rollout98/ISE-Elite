@@ -8,7 +8,7 @@ public sealed class MarketStateInput
     /// <summary>Initializes a market-state evidence snapshot.</summary>
     public MarketStateInput(decimal directionalEfficiency, decimal trendStrength, decimal volatilityRatio, decimal rangeExpansion, decimal pullbackDepth, decimal breakoutAcceptance, decimal reversalEvidence, decimal exhaustionEvidence)
     {
-        DirectionalEfficiency = ValidateUnit(directionalEfficiency, nameof(directionalEfficiency));
+        DirectionalEfficiency = ValidateSignedUnit(directionalEfficiency, nameof(directionalEfficiency));
         TrendStrength = ValidateUnit(trendStrength, nameof(trendStrength));
         VolatilityRatio = ValidateNonNegative(volatilityRatio, nameof(volatilityRatio));
         RangeExpansion = ValidateUnit(rangeExpansion, nameof(rangeExpansion));
@@ -35,10 +35,17 @@ public sealed class MarketStateInput
     /// <summary>Gets normalized evidence that an extended move is exhausting.</summary>
     public decimal ExhaustionEvidence { get; }
 
-    private static decimal ValidateUnit(decimal value, string name)
+    private static decimal ValidateSignedUnit(decimal value, string name)
     {
         if (value < -1m || value > 1m)
             throw new ArgumentOutOfRangeException(name, "Value must be between -1 and 1.");
+        return value;
+    }
+
+    private static decimal ValidateUnit(decimal value, string name)
+    {
+        if (value < 0m || value > 1m)
+            throw new ArgumentOutOfRangeException(name, "Value must be between 0 and 1.");
         return value;
     }
 
