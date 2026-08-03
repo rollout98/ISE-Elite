@@ -16,5 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\ISE.StrategyIntelligence\ISE.StrategyIntelligence.csproj" />
+    <ProjectReference Include="..\..\src\ISE.Confidence\ISE.Confidence.csproj" />
+    <ProjectReference Include="..\..\src\ISE.Playbooks\ISE.Playbooks.csproj" />
   </ItemGroup>
 </Project>
