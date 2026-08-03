@@ -1,3 +1,5 @@
+using System;
+
 namespace ISE.Risk;
 
 /// <summary>Represents the Risk Engine approval and contract quantity.</summary>
