@@ -75,14 +75,14 @@ public sealed class SignalEngineTests
             TrendDirection.Bullish,
             StructureDirection.Bearish,
             false,
-            false,
-            OrderFlowBias.Neutral,
-            minimumConfidence: 20);
+            true,
+            OrderFlowBias.Bullish);
 
         var result = engine.Evaluate(input);
 
-        Assert.Equal(SignalDirection.Long, result.Direction);
-        Assert.Equal(30, result.Confidence);
-        Assert.True(result.ExecutionEligible);
+        Assert.Equal(SignalDirection.None, result.Direction);
+        Assert.Equal(50, result.Confidence);
+        Assert.False(result.ExecutionEligible);
+        Assert.Contains(SignalReason.ConflictingEvidence, result.Reasons);
     }
 }
