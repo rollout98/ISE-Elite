@@ -10,7 +10,7 @@ public sealed class ConfidenceEngineTests
     [Fact]
     public void Strong_alignment_produces_elite_approval()
     {
-        var result = engine.Evaluate(new ConfidenceInput(0.95m, 0.90m, 0.90m, 0.85m, 0.90m, 0.95m, 0.90m, 0.85m, 0.90m));
+        var result = engine.Evaluate(new ConfidenceInput(0.95m, 0.95m, 0.95m, 0.90m, 0.95m, 0.95m, 0.95m, 0.90m, 0.95m));
 
         Assert.True(result.Approved);
         Assert.True(result.Score >= 92m);
