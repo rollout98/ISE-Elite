@@ -1,3 +1,5 @@
+using System;
+
 namespace ISE.Risk;
 
 /// <summary>Approves or rejects trade candidates and calculates a safe contract quantity.</summary>
