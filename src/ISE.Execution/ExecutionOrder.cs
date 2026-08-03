@@ -6,7 +6,7 @@ namespace ISE.Execution;
 public sealed class ExecutionOrder
 {
     /// <summary>Initializes an execution order.</summary>
-    public ExecutionOrder(Guid orderId, Guid tradePlanId, ExecutionOrderRole role, int quantity, decimal price, ExecutionOrderState state, int filledQuantity, string? platformOrderId, string? message)
+    public ExecutionOrder(Guid orderId, Guid tradePlanId, ExecutionOrderRole role, ExecutionSide side, int quantity, decimal price, ExecutionOrderState state, int filledQuantity, string? platformOrderId, string? message)
     {
         if (orderId == Guid.Empty) throw new ArgumentException("Order ID is required.", nameof(orderId));
         if (tradePlanId == Guid.Empty) throw new ArgumentException("Trade plan ID is required.", nameof(tradePlanId));
@@ -17,6 +17,7 @@ public sealed class ExecutionOrder
         OrderId = orderId;
         TradePlanId = tradePlanId;
         Role = role;
+        Side = side;
         Quantity = quantity;
         Price = price;
         State = state;
@@ -31,6 +32,8 @@ public sealed class ExecutionOrder
     public Guid TradePlanId { get; }
     /// <summary>Gets the order role.</summary>
     public ExecutionOrderRole Role { get; }
+    /// <summary>Gets whether the order buys or sells contracts.</summary>
+    public ExecutionSide Side { get; }
     /// <summary>Gets the requested quantity.</summary>
     public int Quantity { get; }
     /// <summary>Gets the planned order price.</summary>
