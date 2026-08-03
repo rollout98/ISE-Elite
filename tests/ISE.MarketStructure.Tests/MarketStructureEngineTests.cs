@@ -66,7 +66,7 @@ public sealed class MarketStructureEngineTests
         var candles = values
             .Select((value, index) => new Candle(
                 "MNQ",
-                Timeframe.OneMinute,
+                Timeframe.Minute1,
                 start.AddMinutes(index),
                 start.AddMinutes(index + 1),
                 value.Close,
