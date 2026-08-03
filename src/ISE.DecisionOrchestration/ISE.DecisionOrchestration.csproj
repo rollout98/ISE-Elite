@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ISE.DailyControls\ISE.DailyControls.csproj" />
+    <ProjectReference Include="..\ISE.OpportunityScoring\ISE.OpportunityScoring.csproj" />
+    <ProjectReference Include="..\ISE.Risk\ISE.Risk.csproj" />
+    <ProjectReference Include="..\ISE.TradePlanning\ISE.TradePlanning.csproj" />
+  </ItemGroup>
+</Project>
