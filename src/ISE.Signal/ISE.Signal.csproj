@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ISE.Trend\ISE.Trend.csproj" />
+    <ProjectReference Include="..\ISE.MarketStructure\ISE.MarketStructure.csproj" />
+    <ProjectReference Include="..\ISE.OrderFlow\ISE.OrderFlow.csproj" />
+  </ItemGroup>
+</Project>
