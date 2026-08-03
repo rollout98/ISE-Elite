@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>ISE.Core</name>
+    </assembly>
+    <members>
+        <member name="T:ISE.Core.Contexts.EngineContext">
+            <summary>
+            Base metadata carried by every immutable engine context.
+            </summary>
+        </member>
+        <member name="M:ISE.Core.Contexts.EngineContext.#ctor(System.Guid,System.Guid,System.String,System.DateTime,System.String,System.String)">
+            <summary>
+            Initializes the common metadata required by every engine context.
+            </summary>
+            <param name="contextId">Unique identifier for this context instance.</param>
+            <param name="correlationId">Identifier used to trace related contexts through the processing pipeline.</param>
+            <param name="tradingDayId">Logical trading-day identifier assigned by the Session Engine.</param>
+            <param name="timestampUtc">UTC timestamp at which the context was produced.</param>
+            <param name="engineVersion">Version of the engine that produced the context.</param>
+            <param name="configurationVersion">Version of the configuration used to produce the context.</param>
+        </member>
+        <member name="P:ISE.Core.Contexts.EngineContext.ContextId">
+            <summary>Gets the unique identifier for this context instance.</summary>
+        </member>
+        <member name="P:ISE.Core.Contexts.EngineContext.CorrelationId">
+            <summary>Gets the identifier that correlates this context with related processing events.</summary>
+        </member>
+        <member name="P:ISE.Core.Contexts.EngineContext.TradingDayId">
+            <summary>Gets the logical trading-day identifier supplied by the Session Engine.</summary>
+        </member>
+        <member name="P:ISE.Core.Contexts.EngineContext.TimestampUtc">
+            <summary>Gets the UTC timestamp at which this context was produced.</summary>
+        </member>
+        <member name="P:ISE.Core.Contexts.EngineContext.EngineVersion">
+            <summary>Gets the version of the engine that produced this context.</summary>
+        </member>
+        <member name="P:ISE.Core.Contexts.EngineContext.ConfigurationVersion">
+            <summary>Gets the configuration version used to produce this context.</summary>
+        </member>
+        <member name="T:ISE.Core.Engines.IEngine`2">
+            <summary>
+            Defines a deterministic engine that transforms one immutable input into one immutable output.
+            </summary>
+            <typeparam name="TInput">The immutable input contract consumed by the engine.</typeparam>
+            <typeparam name="TOutput">The immutable output contract published by the engine.</typeparam>
+        </member>
+        <member name="M:ISE.Core.Engines.IEngine`2.Process(`0)">
+            <summary>
+            Processes the supplied input and returns the deterministic engine output.
+            </summary>
+            <param name="input">The validated immutable input contract.</param>
+            <returns>The immutable result produced by the engine.</returns>
+        </member>
+    </members>
+</doc>

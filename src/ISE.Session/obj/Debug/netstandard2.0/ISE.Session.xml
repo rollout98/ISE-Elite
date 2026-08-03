@@ -1,0 +1,113 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>ISE.Session</name>
+    </assembly>
+    <members>
+        <member name="T:ISE.Session.SessionEngine">
+            <summary>
+            Evaluates UTC timestamps using the America/Chicago logical trading day.
+            </summary>
+        </member>
+        <member name="M:ISE.Session.SessionEngine.#ctor">
+            <summary>
+            Initializes a new instance of the <see cref="T:ISE.Session.SessionEngine"/> class
+            using the America/Chicago time zone.
+            </summary>
+        </member>
+        <member name="M:ISE.Session.SessionEngine.Evaluate(System.DateTime,System.Guid)">
+            <summary>
+            Evaluates a UTC timestamp against the ISE Elite logical trading day.
+            </summary>
+            <param name="timestampUtc">
+            The UTC timestamp to evaluate.
+            </param>
+            <param name="correlationId">
+            The correlation identifier used to trace related processing events.
+            </param>
+            <returns>
+            An immutable session snapshot containing the logical trading day,
+            local timestamp, session phase, and trading-permission state.
+            </returns>
+            <exception cref="T:System.ArgumentException">
+            Thrown when <paramref name="timestampUtc"/> is not UTC or when
+            <paramref name="correlationId"/> is empty.
+            </exception>
+        </member>
+        <member name="T:ISE.Session.SessionPhase">
+            <summary>
+            Identifies the logical phase within the ISE Elite trading day.
+            </summary>
+        </member>
+        <member name="F:ISE.Session.SessionPhase.Maintenance">
+            <summary>
+            The 3:00 PM–5:00 PM Central maintenance window.
+            </summary>
+        </member>
+        <member name="F:ISE.Session.SessionPhase.Evening">
+            <summary>
+            The evening session beginning at 5:00 PM Central.
+            </summary>
+        </member>
+        <member name="F:ISE.Session.SessionPhase.Overnight">
+            <summary>
+            The overnight trading session.
+            </summary>
+        </member>
+        <member name="F:ISE.Session.SessionPhase.Premarket">
+            <summary>
+            The premarket period before the New York open.
+            </summary>
+        </member>
+        <member name="F:ISE.Session.SessionPhase.NewYorkOpen">
+            <summary>
+            The New York opening phase beginning at 8:30 AM Central.
+            </summary>
+        </member>
+        <member name="F:ISE.Session.SessionPhase.RegularTrading">
+            <summary>
+            The regular intraday trading phase.
+            </summary>
+        </member>
+        <member name="F:ISE.Session.SessionPhase.Closing">
+            <summary>
+            The closing phase before the 3:00 PM Central cutoff.
+            </summary>
+        </member>
+        <member name="T:ISE.Session.SessionSnapshot">
+            <summary>
+            Represents the immutable result of evaluating a UTC timestamp
+            against the ISE Elite logical trading day.
+            </summary>
+        </member>
+        <member name="M:ISE.Session.SessionSnapshot.#ctor(System.Guid,System.Guid,System.String,System.DateTime,System.String,System.String,System.DateTime,ISE.Session.SessionPhase,System.Boolean)">
+            <summary>
+            Initializes a new instance of the <see cref="T:ISE.Session.SessionSnapshot"/> class.
+            </summary>
+            <param name="contextId">The unique identifier for this context instance.</param>
+            <param name="correlationId">The identifier used to trace related processing events.</param>
+            <param name="tradingDayId">The logical trading-day identifier.</param>
+            <param name="timestampUtc">The evaluated UTC timestamp.</param>
+            <param name="engineVersion">The version of the Session Engine.</param>
+            <param name="configurationVersion">The session configuration version.</param>
+            <param name="localTimestamp">The timestamp converted to America/Chicago time.</param>
+            <param name="phase">The classified session phase.</param>
+            <param name="tradingPermitted">Whether new trading activity is permitted.</param>
+        </member>
+        <member name="P:ISE.Session.SessionSnapshot.LocalTimestamp">
+            <summary>
+            Gets the timestamp converted to America/Chicago time.
+            </summary>
+        </member>
+        <member name="P:ISE.Session.SessionSnapshot.Phase">
+            <summary>
+            Gets the classified session phase.
+            </summary>
+        </member>
+        <member name="P:ISE.Session.SessionSnapshot.TradingPermitted">
+            <summary>
+            Gets a value indicating whether new trading activity is permitted.
+            </summary>
+        </member>
+    </members>
+</doc>
