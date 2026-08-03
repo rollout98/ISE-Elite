@@ -10,6 +10,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISE.Session", "src/ISE.Sess
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISE.Session.Tests", "tests/ISE.Session.Tests/ISE.Session.Tests.csproj", "{E186A75C-241D-4890-A97D-EDC8E2017971}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISE.Trend", "src/ISE.Trend/ISE.Trend.csproj", "{C1080B37-D8D3-4534-AAC4-4F0634C25BE8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISE.Trend.Tests", "tests/ISE.Trend.Tests/ISE.Trend.Tests.csproj", "{30A6D185-BB06-4433-B923-CB26C9114893}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,5 +36,13 @@ Global
 		{E186A75C-241D-4890-A97D-EDC8E2017971}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E186A75C-241D-4890-A97D-EDC8E2017971}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E186A75C-241D-4890-A97D-EDC8E2017971}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C1080B37-D8D3-4534-AAC4-4F0634C25BE8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C1080B37-D8D3-4534-AAC4-4F0634C25BE8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C1080B37-D8D3-4534-AAC4-4F0634C25BE8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C1080B37-D8D3-4534-AAC4-4F0634C25BE8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30A6D185-BB06-4433-B923-CB26C9114893}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30A6D185-BB06-4433-B923-CB26C9114893}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30A6D185-BB06-4433-B923-CB26C9114893}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30A6D185-BB06-4433-B923-CB26C9114893}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
