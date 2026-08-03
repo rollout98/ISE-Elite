@@ -5,6 +5,7 @@ namespace ISE.Risk;
 /// <summary>Approves or rejects trade candidates and calculates a safe contract quantity.</summary>
 public sealed class RiskEngine
 {
+    /// <summary>Evaluates a trade candidate against the configured account profile and live account state.</summary>
     public RiskDecision Evaluate(RiskInput input)
     {
         if (input is null) throw new ArgumentNullException(nameof(input));
