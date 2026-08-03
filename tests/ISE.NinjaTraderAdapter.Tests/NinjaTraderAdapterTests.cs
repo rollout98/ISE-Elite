@@ -49,5 +49,5 @@ public sealed class NinjaTraderAdapterTests
     }
 
     private static ExecutionOrder CreateOrder(ExecutionOrderRole role, ExecutionSide side, int quantity, decimal price) =>
-        new ExecutionOrder(Guid.NewGuid(), Guid.NewGuid(), role, side, quantity, price, ExecutionOrderState.Pending, 0, null, null);
+        new ExecutionOrder(Guid.NewGuid(), Guid.NewGuid(), role, side, quantity, price, ExecutionOrderState.PendingSubmission, 0, null, null);
 }
