@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace ISE.Signal;
 
 /// <summary>Represents an explainable Signal Engine decision.</summary>
