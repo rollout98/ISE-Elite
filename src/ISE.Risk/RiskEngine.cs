@@ -10,15 +10,16 @@ public sealed class RiskEngine
 
         if (!input.SignalEligible)
             return Reject(RiskDecisionReason.SignalNotEligible);
+        if (input.TradesToday >= profile.MaximumTradesPerDay)
+            return Reject(RiskDecisionReason.TradeLimitReached);
         if (input.RealizedDailyLoss >= profile.DailyLossLimit)
             return Reject(RiskDecisionReason.DailyLossLimitReached);
 
         var remainingDailyRisk = profile.DailyLossLimit - input.RealizedDailyLoss;
-        var usableDrawdown = input.RemainingDrawdown;
-        if (usableDrawdown <= 0)
+        if (input.RemainingDrawdown <= 0)
             return Reject(RiskDecisionReason.InsufficientDrawdownRoom);
 
-        var availableRisk = Math.Min(profile.MaximumRiskPerTrade, Math.Min(remainingDailyRisk, usableDrawdown));
+        var availableRisk = Math.Min(profile.MaximumRiskPerTrade, Math.Min(remainingDailyRisk, input.RemainingDrawdown));
         if (input.RiskPerContract > availableRisk)
             return Reject(RiskDecisionReason.StopRiskExceedsCapacity);
 
@@ -27,9 +28,8 @@ public sealed class RiskEngine
         if (contracts < 1)
             return Reject(RiskDecisionReason.NoContractsAllowed);
 
-        var totalRisk = contracts * input.RiskPerContract;
-        return new RiskDecision(true, contracts, totalRisk, RiskDecisionReason.Approved);
+        return new RiskDecision(true, contracts, contracts * input.RiskPerContract, RiskDecisionReason.Approved);
     }
 
-    private static RiskDecision Reject(RiskDecisionReason reason) => new(false, 0, 0, reason);
+    private static RiskDecision Reject(RiskDecisionReason reason) => new RiskDecision(false, 0, 0, reason);
 }
