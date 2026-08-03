@@ -1,6 +1,7 @@
 using ISE.MarketStructure;
 using ISE.OrderFlow;
 using ISE.Trend;
+using Xunit;
 
 namespace ISE.Signal.Tests;
 
