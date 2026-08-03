@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ISE.DecisionOrchestration/ISE.DecisionOrchestration.csproj" />
+    <ProjectReference Include="../ISE.Execution/ISE.Execution.csproj" />
+  </ItemGroup>
+</Project>
