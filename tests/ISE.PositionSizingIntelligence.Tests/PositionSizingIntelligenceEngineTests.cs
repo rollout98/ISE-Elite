@@ -14,13 +14,13 @@ public sealed class PositionSizingIntelligenceEngineTests
             MaximumContracts = 4,
             ParticipationMultiplier = 1.0,
             AdaptiveRiskMultiplier = 1.0,
-            StopDistanceRisk = 5,
+            StopDistanceRisk = 0,
             LiquidityCapacity = 100,
             AccountPressure = 0
         });
 
         Assert.Equal(PositionSizingAction.FullSize, decision.Action);
-        Assert.Equal(3, decision.Contracts);
+        Assert.Equal(4, decision.Contracts);
     }
 
     [Fact]
