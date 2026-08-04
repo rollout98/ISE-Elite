@@ -75,6 +75,18 @@ public sealed class InstitutionalMemoryDecision
 
 public sealed class InstitutionalMemoryEngine
 {
+    private sealed class WeightedTradeMatch
+    {
+        public WeightedTradeMatch(InstitutionalTradeRecord record, decimal similarity)
+        {
+            Record = record ?? throw new ArgumentNullException(nameof(record));
+            Similarity = similarity;
+        }
+
+        public InstitutionalTradeRecord Record { get; }
+        public decimal Similarity { get; }
+    }
+
     private readonly MarketMemoryEngine _marketMemory = new MarketMemoryEngine();
 
     public InstitutionalMemoryDecision Evaluate(MarketFingerprint current, string playbook,
@@ -92,7 +104,7 @@ public sealed class InstitutionalMemoryEngine
 
         var matches = history
             .Where(x => string.Equals(x.Playbook, playbook, StringComparison.OrdinalIgnoreCase))
-            .Select(x => new { Record = x, Similarity = _marketMemory.Similarity(current, x.Fingerprint) })
+            .Select(x => new WeightedTradeMatch(x, _marketMemory.Similarity(current, x.Fingerprint)))
             .Where(x => x.Similarity >= 0.60m)
             .OrderByDescending(x => x.Similarity)
             .Take(maxMatches)
@@ -103,12 +115,12 @@ public sealed class InstitutionalMemoryEngine
                 "At least three comparable completed trades are required.");
 
         decimal totalWeight = matches.Sum(x => x.Similarity);
-        decimal winRate = Weighted(matches, x => x.Record.ResultR > 0 ? 1m : 0m, totalWeight);
-        decimal avgR = Weighted(matches, x => x.Record.ResultR, totalWeight);
-        decimal avgMfe = Weighted(matches, x => x.Record.MaximumFavorableExcursion, totalWeight);
-        decimal avgMae = Weighted(matches, x => x.Record.MaximumAdverseExcursion, totalWeight);
-        decimal thesisRate = Weighted(matches, x => x.Record.ThesisConfirmed ? 1m : 0m, totalWeight);
-        int hold = (int)Math.Round(Weighted(matches, x => x.Record.HoldMinutes, totalWeight), MidpointRounding.AwayFromZero);
+        decimal winRate = Weighted(matches, x => x.ResultR > 0 ? 1m : 0m, totalWeight);
+        decimal avgR = Weighted(matches, x => x.ResultR, totalWeight);
+        decimal avgMfe = Weighted(matches, x => x.MaximumFavorableExcursion, totalWeight);
+        decimal avgMae = Weighted(matches, x => x.MaximumAdverseExcursion, totalWeight);
+        decimal thesisRate = Weighted(matches, x => x.ThesisConfirmed ? 1m : 0m, totalWeight);
+        int hold = (int)Math.Round(Weighted(matches, x => x.HoldMinutes, totalWeight), MidpointRounding.AwayFromZero);
         int adjustment = ConfidenceAdjustment(matches.Length, winRate, avgR, thesisRate);
 
         return Decision(InstitutionalMemoryStatus.Ready, matches.Length, winRate, avgR, avgMfe, avgMae,
@@ -116,8 +128,18 @@ public sealed class InstitutionalMemoryEngine
             $"{matches.Length} comparable {playbook.Trim()} trades produced a {winRate:P0} weighted win rate.");
     }
 
-    private static decimal Weighted<T>(IEnumerable<T> items, Func<T, decimal> selector, decimal totalWeight)
-        => totalWeight == 0 ? 0 : Math.Round(items.Sum(x => selector(x) * ((dynamic)x).Similarity) / totalWeight, 4, MidpointRounding.AwayFromZero);
+    private static decimal Weighted(IEnumerable<WeightedTradeMatch> items,
+        Func<InstitutionalTradeRecord, decimal> selector, decimal totalWeight)
+    {
+        if (items == null) throw new ArgumentNullException(nameof(items));
+        if (selector == null) throw new ArgumentNullException(nameof(selector));
+        if (totalWeight == 0) return 0;
+
+        return Math.Round(
+            items.Sum(x => selector(x.Record) * x.Similarity) / totalWeight,
+            4,
+            MidpointRounding.AwayFromZero);
+    }
 
     private static int ConfidenceAdjustment(int count, decimal winRate, decimal averageR, decimal thesisRate)
     {
