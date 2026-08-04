@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using ISE.ExecutionOrchestrator;
 using ISE.InstitutionalDecisionEngine;
 using ISE.PositionSizingIntelligence;
+using InstitutionalEngine = ISE.InstitutionalDecisionEngine.InstitutionalDecisionEngine;
+using RuntimeOrchestrator = ISE.ExecutionOrchestrator.ExecutionOrchestrator;
 
 namespace ISE.TradingBrain;
 
@@ -48,22 +50,22 @@ public sealed class IntegratedTradingBrainDecision
 /// </summary>
 public sealed class IntegratedTradingBrain
 {
-    private readonly InstitutionalDecisionEngine.InstitutionalDecisionEngine _institutionalDecisionEngine;
+    private readonly InstitutionalEngine _institutionalDecisionEngine;
     private readonly PositionSizingIntelligenceEngine _positionSizingEngine;
-    private readonly ExecutionOrchestrator.ExecutionOrchestrator _executionOrchestrator;
+    private readonly RuntimeOrchestrator _executionOrchestrator;
 
     public IntegratedTradingBrain()
         : this(
-            new InstitutionalDecisionEngine.InstitutionalDecisionEngine(),
+            new InstitutionalEngine(),
             new PositionSizingIntelligenceEngine(),
-            new ExecutionOrchestrator.ExecutionOrchestrator())
+            new RuntimeOrchestrator())
     {
     }
 
     public IntegratedTradingBrain(
-        InstitutionalDecisionEngine.InstitutionalDecisionEngine institutionalDecisionEngine,
+        InstitutionalEngine institutionalDecisionEngine,
         PositionSizingIntelligenceEngine positionSizingEngine,
-        ExecutionOrchestrator.ExecutionOrchestrator executionOrchestrator)
+        RuntimeOrchestrator executionOrchestrator)
     {
         _institutionalDecisionEngine = institutionalDecisionEngine ?? throw new ArgumentNullException(nameof(institutionalDecisionEngine));
         _positionSizingEngine = positionSizingEngine ?? throw new ArgumentNullException(nameof(positionSizingEngine));
