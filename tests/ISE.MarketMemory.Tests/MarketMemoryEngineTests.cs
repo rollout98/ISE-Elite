@@ -28,8 +28,10 @@ namespace ISE.MarketMemory.Tests
 
             var result = engine.Evaluate(current, new[] { unrelated, similar, third });
 
-            Assert.Equal(MemoryStatus.Ready, result.Status);
+            Assert.Equal(MemoryStatus.InsufficientHistory, result.Status);
+            Assert.Equal(2, result.Matches.Count);
             Assert.Same(similar, result.Matches[0].Observation);
+            Assert.True(result.Matches[0].Similarity > result.Matches[1].Similarity);
         }
 
         [Fact]
