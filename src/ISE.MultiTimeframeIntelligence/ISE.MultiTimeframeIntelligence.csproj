@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>ISE.MultiTimeframeIntelligence</RootNamespace>
+    <AssemblyName>ISE.MultiTimeframeIntelligence</AssemblyName>
+  </PropertyGroup>
+</Project>
