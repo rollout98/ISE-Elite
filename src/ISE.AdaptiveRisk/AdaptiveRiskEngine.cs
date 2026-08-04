@@ -7,13 +7,13 @@ public enum AdaptiveRiskAction { FullRisk, ReducedRisk, MinimalRisk, StandAside,
 
 public sealed class AdaptiveRiskInput
 {
-    public double DecisionConfidence { get; init; }
-    public double ExecutionQuality { get; init; }
-    public double MarketHealth { get; init; }
-    public double VolatilityRisk { get; init; }
-    public double DrawdownPressure { get; init; }
-    public double DailyObjectivePressure { get; init; }
-    public bool AuthoritativeRiskBlock { get; init; }
+    public double DecisionConfidence { get; set; }
+    public double ExecutionQuality { get; set; }
+    public double MarketHealth { get; set; }
+    public double VolatilityRisk { get; set; }
+    public double DrawdownPressure { get; set; }
+    public double DailyObjectivePressure { get; set; }
+    public bool AuthoritativeRiskBlock { get; set; }
 }
 
 public sealed class AdaptiveRiskDecision
