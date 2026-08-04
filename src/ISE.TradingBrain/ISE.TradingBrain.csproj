@@ -8,5 +8,7 @@
     <ProjectReference Include="../ISE.InstitutionalDecisionEngine/ISE.InstitutionalDecisionEngine.csproj" />
     <ProjectReference Include="../ISE.PositionSizingIntelligence/ISE.PositionSizingIntelligence.csproj" />
     <ProjectReference Include="../ISE.ExecutionOrchestrator/ISE.ExecutionOrchestrator.csproj" />
+    <ProjectReference Include="../ISE.TradeStateIntelligence/ISE.TradeStateIntelligence.csproj" />
+    <ProjectReference Include="../ISE.TradeManagementIntelligence/ISE.TradeManagementIntelligence.csproj" />
   </ItemGroup>
 </Project>
