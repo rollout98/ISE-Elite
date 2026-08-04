@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ISE.TradingBrain/ISE.TradingBrain.csproj" />
+    <ProjectReference Include="../ISE.InstitutionalMemory/ISE.InstitutionalMemory.csproj" />
+    <ProjectReference Include="../ISE.MarketMemory/ISE.MarketMemory.csproj" />
+  </ItemGroup>
+</Project>
