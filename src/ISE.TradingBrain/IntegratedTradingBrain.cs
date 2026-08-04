@@ -10,7 +10,7 @@ namespace ISE.TradingBrain;
 
 public sealed class IntegratedTradingBrainInput
 {
-    public InstitutionalDecisionInput InstitutionalDecision { get; set; }
+    public InstitutionalDecisionInput InstitutionalDecision { get; set; } = new InstitutionalDecisionInput();
     public int MaximumContracts { get; set; }
     public double AdaptiveRiskMultiplier { get; set; }
     public double StopDistanceRisk { get; set; }
