@@ -5,5 +5,8 @@
   <ItemGroup>
     <ProjectReference Include="../ISE.DecisionOrchestration/ISE.DecisionOrchestration.csproj" />
     <ProjectReference Include="../ISE.Execution/ISE.Execution.csproj" />
+    <ProjectReference Include="../ISE.InstitutionalDecisionEngine/ISE.InstitutionalDecisionEngine.csproj" />
+    <ProjectReference Include="../ISE.PositionSizingIntelligence/ISE.PositionSizingIntelligence.csproj" />
+    <ProjectReference Include="../ISE.ExecutionOrchestrator/ISE.ExecutionOrchestrator.csproj" />
   </ItemGroup>
 </Project>
