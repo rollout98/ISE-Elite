@@ -8,13 +8,18 @@ namespace ISE.Elite.NinjaTrader8;
 public sealed class IseEliteNt8Options
 {
     private IseEliteNt8Options(string accountName, string instrumentRoot, string instrumentFullName,
-        bool smokeTestEnabled, decimal smokeTestLimitPrice)
+        bool smokeTestEnabled, decimal smokeTestLimitPrice, bool protectionEnabled,
+        int protectiveStopTicks, int protectiveTargetTicks, bool emergencyFlattenOnProtectionFailure)
     {
         AccountName = accountName;
         InstrumentRoot = instrumentRoot;
         InstrumentFullName = instrumentFullName;
         SmokeTestEnabled = smokeTestEnabled;
         SmokeTestLimitPrice = smokeTestLimitPrice;
+        ProtectionEnabled = protectionEnabled;
+        ProtectiveStopTicks = protectiveStopTicks;
+        ProtectiveTargetTicks = protectiveTargetTicks;
+        EmergencyFlattenOnProtectionFailure = emergencyFlattenOnProtectionFailure;
     }
 
     public string AccountName { get; }
@@ -22,6 +27,10 @@ public sealed class IseEliteNt8Options
     public string InstrumentFullName { get; }
     public bool SmokeTestEnabled { get; }
     public decimal SmokeTestLimitPrice { get; }
+    public bool ProtectionEnabled { get; }
+    public int ProtectiveStopTicks { get; }
+    public int ProtectiveTargetTicks { get; }
+    public bool EmergencyFlattenOnProtectionFailure { get; }
 
     public static string DefaultConfigurationPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -64,8 +73,20 @@ public sealed class IseEliteNt8Options
             throw new InvalidOperationException(
                 "SmokeTestLimitPrice must be a realistic positive price when SmokeTestEnabled=true.");
 
+        var protectionEnabled = OptionalBoolean(values, "ProtectionEnabled", false);
+        var protectiveStopTicks = OptionalInteger(values, "ProtectiveStopTicks", 40);
+        var protectiveTargetTicks = OptionalInteger(values, "ProtectiveTargetTicks", 80);
+        var emergencyFlattenOnProtectionFailure = OptionalBoolean(
+            values, "EmergencyFlattenOnProtectionFailure", true);
+
+        if (protectiveStopTicks <= 0)
+            throw new InvalidOperationException("ProtectiveStopTicks must be greater than zero.");
+        if (protectiveTargetTicks <= 0)
+            throw new InvalidOperationException("ProtectiveTargetTicks must be greater than zero.");
+
         return new IseEliteNt8Options(accountName, instrumentRoot, instrumentFullName,
-            smokeTestEnabled, smokeTestLimitPrice);
+            smokeTestEnabled, smokeTestLimitPrice, protectionEnabled, protectiveStopTicks,
+            protectiveTargetTicks, emergencyFlattenOnProtectionFailure);
     }
 
     public string ResolveInstrument(string requestedInstrument)
@@ -100,6 +121,15 @@ public sealed class IseEliteNt8Options
             return fallback;
         if (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
             throw new InvalidDataException($"Configuration value '{key}' must be a decimal number using a period.");
+        return parsed;
+    }
+
+    private static int OptionalInteger(IReadOnlyDictionary<string, string> values, string key, int fallback)
+    {
+        if (!values.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+            return fallback;
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            throw new InvalidDataException($"Configuration value '{key}' must be an integer.");
         return parsed;
     }
 }

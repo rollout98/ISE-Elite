@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\src\ISE.BrokerExecution\ISE.BrokerExecution.csproj" />
     <ProjectReference Include="..\..\src\ISE.ExecutionCoordinator\ISE.ExecutionCoordinator.csproj" />
     <ProjectReference Include="..\..\src\ISE.NinjaTraderAdapter\ISE.NinjaTraderAdapter.csproj" />
+    <ProjectReference Include="..\..\src\ISE.PositionManager\ISE.PositionManager.csproj" />
   </ItemGroup>
 
   <ItemGroup>
