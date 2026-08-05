@@ -20,7 +20,8 @@ public sealed class OptimizationIntelligenceEngineTests
         });
 
         Assert.Equal(OptimizationStatus.Ready, result.Status);
-        Assert.Equal("strong", result.Best.Candidate.CandidateId);
+        var best = Assert.IsType<OptimizationScore>(result.Best);
+        Assert.Equal("strong", best.Candidate.CandidateId);
     }
 
     [Fact]
@@ -32,7 +33,8 @@ public sealed class OptimizationIntelligenceEngineTests
             Candidate("low-dd", 2, Report(10, 6, 4, 4m, 0.60m, 2m, 1m, 85m))
         });
 
-        Assert.Equal("low-dd", result.Best.Candidate.CandidateId);
+        var best = Assert.IsType<OptimizationScore>(result.Best);
+        Assert.Equal("low-dd", best.Candidate.CandidateId);
     }
 
     [Fact]
@@ -45,7 +47,8 @@ public sealed class OptimizationIntelligenceEngineTests
         });
 
         Assert.True(result.RankedCandidates[0].CompositeScore > result.RankedCandidates[1].CompositeScore);
-        Assert.Equal("high-pf", result.Best.Candidate.CandidateId);
+        var best = Assert.IsType<OptimizationScore>(result.Best);
+        Assert.Equal("high-pf", best.Candidate.CandidateId);
     }
 
     [Fact]
@@ -59,7 +62,8 @@ public sealed class OptimizationIntelligenceEngineTests
 
         Assert.Equal(1, result.DuplicateCandidatesIgnored);
         Assert.Single(result.RankedCandidates);
-        Assert.Equal("first", result.Best.Candidate.CandidateId);
+        var best = Assert.IsType<OptimizationScore>(result.Best);
+        Assert.Equal("first", best.Candidate.CandidateId);
     }
 
     [Fact]
@@ -71,7 +75,8 @@ public sealed class OptimizationIntelligenceEngineTests
             Candidate("valid", 2, Report(5, 3, 2, 2m, 0.60m, 1.5m, 1m, 80m))
         }, minimumCompletedTrades: 3);
 
-        Assert.Equal("valid", result.Best.Candidate.CandidateId);
+        var best = Assert.IsType<OptimizationScore>(result.Best);
+        Assert.Equal("valid", best.Candidate.CandidateId);
         Assert.False(result.RankedCandidates[1].EvidenceSufficient);
     }
 
@@ -85,7 +90,8 @@ public sealed class OptimizationIntelligenceEngineTests
             Candidate("alpha", 1, report)
         });
 
-        Assert.Equal("alpha", result.Best.Candidate.CandidateId);
+        var best = Assert.IsType<OptimizationScore>(result.Best);
+        Assert.Equal("alpha", best.Candidate.CandidateId);
         Assert.Equal("alpha", result.RankedCandidates[0].Candidate.CandidateId);
     }
 
