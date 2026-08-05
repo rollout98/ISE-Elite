@@ -1,21 +1,27 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 
 namespace ISE.Elite.NinjaTrader8;
 
 public sealed class IseEliteNt8Options
 {
-    private IseEliteNt8Options(string accountName, string instrumentRoot, string instrumentFullName)
+    private IseEliteNt8Options(string accountName, string instrumentRoot, string instrumentFullName,
+        bool smokeTestEnabled, decimal smokeTestLimitPrice)
     {
         AccountName = accountName;
         InstrumentRoot = instrumentRoot;
         InstrumentFullName = instrumentFullName;
+        SmokeTestEnabled = smokeTestEnabled;
+        SmokeTestLimitPrice = smokeTestLimitPrice;
     }
 
     public string AccountName { get; }
     public string InstrumentRoot { get; }
     public string InstrumentFullName { get; }
+    public bool SmokeTestEnabled { get; }
+    public decimal SmokeTestLimitPrice { get; }
 
     public static string DefaultConfigurationPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -52,7 +58,14 @@ public sealed class IseEliteNt8Options
             !string.Equals(instrumentFullName, instrumentRoot, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("InstrumentFullName must match the configured instrument root.");
 
-        return new IseEliteNt8Options(accountName, instrumentRoot, instrumentFullName);
+        var smokeTestEnabled = OptionalBoolean(values, "SmokeTestEnabled", false);
+        var smokeTestLimitPrice = OptionalDecimal(values, "SmokeTestLimitPrice", 0m);
+        if (smokeTestEnabled && smokeTestLimitPrice <= 100m)
+            throw new InvalidOperationException(
+                "SmokeTestLimitPrice must be a realistic positive price when SmokeTestEnabled=true.");
+
+        return new IseEliteNt8Options(accountName, instrumentRoot, instrumentFullName,
+            smokeTestEnabled, smokeTestLimitPrice);
     }
 
     public string ResolveInstrument(string requestedInstrument)
@@ -70,5 +83,23 @@ public sealed class IseEliteNt8Options
         if (!values.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
             throw new InvalidDataException($"Required configuration value '{key}' is missing.");
         return value;
+    }
+
+    private static bool OptionalBoolean(IReadOnlyDictionary<string, string> values, string key, bool fallback)
+    {
+        if (!values.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+            return fallback;
+        if (!bool.TryParse(value, out var parsed))
+            throw new InvalidDataException($"Configuration value '{key}' must be true or false.");
+        return parsed;
+    }
+
+    private static decimal OptionalDecimal(IReadOnlyDictionary<string, string> values, string key, decimal fallback)
+    {
+        if (!values.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+            return fallback;
+        if (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
+            throw new InvalidDataException($"Configuration value '{key}' must be a decimal number using a period.");
+        return parsed;
     }
 }
