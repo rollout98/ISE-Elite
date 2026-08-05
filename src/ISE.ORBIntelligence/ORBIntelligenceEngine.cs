@@ -135,12 +135,6 @@ public sealed class ORBIntelligenceEngine
         }
 
         var direction = ResolveDirection(input);
-        if (direction == ORBDirection.None)
-        {
-            reasons.Add("Price remains inside the completed opening range.");
-            return Decision(ORBState.AwaitBreakout, direction, 20, false, false, false, reasons);
-        }
-
         int confidence = CalculateConfidence(input);
 
         if (input.ReturnedInsideRange)
@@ -149,6 +143,12 @@ public sealed class ORBIntelligenceEngine
             bool sweep = input.BreakoutDistanceTicks >= 4m;
             return Decision(sweep ? ORBState.LiquiditySweep : ORBState.BreakoutRejected,
                 direction, Math.Min(confidence, 45), false, false, false, reasons);
+        }
+
+        if (direction == ORBDirection.None)
+        {
+            reasons.Add("Price remains inside the completed opening range.");
+            return Decision(ORBState.AwaitBreakout, direction, 20, false, false, false, reasons);
         }
 
         if (input.RetestAttempted)
