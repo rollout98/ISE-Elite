@@ -85,8 +85,18 @@ public sealed class ExecutionCoordinatorTests
         coordinator.DispatchNext(DateTime.UtcNow);
         coordinator.RecordBrokerUpdate(request, ExecutionState.Filled, "Filled", DateTime.UtcNow);
         coordinator.RecordBrokerUpdate(request, ExecutionState.Completed, "Lifecycle complete", DateTime.UtcNow);
-        Assert.Equal(4, coordinator.History.Count);
-        Assert.Equal(ExecutionState.Completed, coordinator.History.Last().State);
+
+        Assert.Equal(5, coordinator.History.Count);
+        Assert.Equal(
+            new[]
+            {
+                ExecutionState.Validated,
+                ExecutionState.Queued,
+                ExecutionState.Submitted,
+                ExecutionState.Filled,
+                ExecutionState.Completed
+            },
+            coordinator.History.Select(record => record.State));
     }
 
     private static ExecutionRequest Request(string id) => new ExecutionRequest(
