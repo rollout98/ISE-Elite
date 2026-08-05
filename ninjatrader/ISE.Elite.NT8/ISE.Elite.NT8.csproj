@@ -44,9 +44,13 @@
 
   <Target Name="DeployToNinjaTrader" AfterTargets="Build">
     <MakeDir Directories="$(NinjaTraderCustomDir)" />
+    <ItemGroup>
+      <IseBridgeDependency Include="$(TargetDir)ISE.*.dll" Exclude="$(TargetPath)" />
+    </ItemGroup>
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(NinjaTraderCustomDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(TargetDir)ISE.NinjaTraderHost.dll;$(TargetDir)ISE.BrokerExecution.dll;$(TargetDir)ISE.ExecutionCoordinator.dll;$(TargetDir)ISE.NinjaTraderAdapter.dll"
-          DestinationFolder="$(NinjaTraderCustomDir)"
+    <Copy SourceFiles="@(IseBridgeDependency)" DestinationFolder="$(NinjaTraderCustomDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)ISE.Elite.NT8.config.template"
+          DestinationFiles="$(NinjaTraderCustomDir)\ISE.Elite.NT8.config.template"
           SkipUnchangedFiles="true" />
   </Target>
 </Project>
