@@ -205,10 +205,21 @@ namespace NinjaTrader.NinjaScript.AddOns
             controller = null;
             options = null;
 
+            string? startupFailure = null;
             if (runtime == null || !runtime.IsStarted)
             {
+                WriteOutput("Protected-fill command found no active runtime; attempting a safe Sim101 startup retry.");
+                IseEliteNt8BridgeStartup.TryStart(WriteOutput, out startupFailure);
+                runtime = IseEliteNt8BridgeRegistry.Runtime;
+            }
+
+            if (runtime == null || !runtime.IsStarted)
+            {
+                var detail = string.IsNullOrWhiteSpace(startupFailure)
+                    ? "No startup failure detail was captured."
+                    : startupFailure;
                 MessageBox.Show(_controlCenterWindow,
-                    "ISE Elite NT8 runtime is not running. Start or reconnect the main bridge first.",
+                    "ISE Elite NT8 runtime is not running.\n\n" + detail,
                     "ISE Elite — Protected Fill Test",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
