@@ -1,0 +1,9 @@
+# ISE Elite NinjaTrader 8 bridge configuration
+# Copy this file to:
+#   %USERPROFILE%\Documents\NinjaTrader 8\bin\Custom\ISE.Elite.NT8.config
+#
+# This build is intentionally locked to Sim101 and one instrument.
+
+AccountName=Sim101
+InstrumentRoot=MNQ
+InstrumentFullName=MNQ 09-26
