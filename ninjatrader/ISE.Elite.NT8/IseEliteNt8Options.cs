@@ -9,7 +9,8 @@ public sealed class IseEliteNt8Options
 {
     private IseEliteNt8Options(string accountName, string instrumentRoot, string instrumentFullName,
         bool smokeTestEnabled, decimal smokeTestLimitPrice, bool protectionEnabled,
-        int protectiveStopTicks, int protectiveTargetTicks, bool emergencyFlattenOnProtectionFailure)
+        int protectiveStopTicks, int protectiveTargetTicks, bool emergencyFlattenOnProtectionFailure,
+        bool protectedFillTestEnabled)
     {
         AccountName = accountName;
         InstrumentRoot = instrumentRoot;
@@ -20,6 +21,7 @@ public sealed class IseEliteNt8Options
         ProtectiveStopTicks = protectiveStopTicks;
         ProtectiveTargetTicks = protectiveTargetTicks;
         EmergencyFlattenOnProtectionFailure = emergencyFlattenOnProtectionFailure;
+        ProtectedFillTestEnabled = protectedFillTestEnabled;
     }
 
     public string AccountName { get; }
@@ -31,6 +33,7 @@ public sealed class IseEliteNt8Options
     public int ProtectiveStopTicks { get; }
     public int ProtectiveTargetTicks { get; }
     public bool EmergencyFlattenOnProtectionFailure { get; }
+    public bool ProtectedFillTestEnabled { get; }
 
     public static string DefaultConfigurationPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -78,15 +81,22 @@ public sealed class IseEliteNt8Options
         var protectiveTargetTicks = OptionalInteger(values, "ProtectiveTargetTicks", 80);
         var emergencyFlattenOnProtectionFailure = OptionalBoolean(
             values, "EmergencyFlattenOnProtectionFailure", true);
+        var protectedFillTestEnabled = OptionalBoolean(values, "ProtectedFillTestEnabled", false);
 
         if (protectiveStopTicks <= 0)
             throw new InvalidOperationException("ProtectiveStopTicks must be greater than zero.");
         if (protectiveTargetTicks <= 0)
             throw new InvalidOperationException("ProtectiveTargetTicks must be greater than zero.");
+        if (protectedFillTestEnabled && !protectionEnabled)
+            throw new InvalidOperationException(
+                "ProtectionEnabled must be true when ProtectedFillTestEnabled=true.");
+        if (protectedFillTestEnabled && smokeTestEnabled)
+            throw new InvalidOperationException(
+                "SmokeTestEnabled and ProtectedFillTestEnabled cannot both be true.");
 
         return new IseEliteNt8Options(accountName, instrumentRoot, instrumentFullName,
             smokeTestEnabled, smokeTestLimitPrice, protectionEnabled, protectiveStopTicks,
-            protectiveTargetTicks, emergencyFlattenOnProtectionFailure);
+            protectiveTargetTicks, emergencyFlattenOnProtectionFailure, protectedFillTestEnabled);
     }
 
     public string ResolveInstrument(string requestedInstrument)
