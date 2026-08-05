@@ -12,3 +12,10 @@ InstrumentFullName=MNQ 09-26
 # non-marketable and has been reviewed immediately before the smoke test.
 SmokeTestEnabled=false
 SmokeTestLimitPrice=0
+
+# Protective execution remains disabled until the NT8 stop/target path has
+# compiled and completed a supervised Sim101 fill test.
+ProtectionEnabled=false
+ProtectiveStopTicks=40
+ProtectiveTargetTicks=80
+EmergencyFlattenOnProtectionFailure=true
