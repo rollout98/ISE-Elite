@@ -82,7 +82,7 @@ public sealed class OptimizationScore
 
 public sealed class OptimizationResult
 {
-    public OptimizationResult(OptimizationStatus status, OptimizationScore best,
+    public OptimizationResult(OptimizationStatus status, OptimizationScore? best,
         IReadOnlyList<OptimizationScore> rankedCandidates, int duplicateCandidatesIgnored)
     {
         Status = status;
@@ -92,7 +92,7 @@ public sealed class OptimizationResult
     }
 
     public OptimizationStatus Status { get; }
-    public OptimizationScore Best { get; }
+    public OptimizationScore? Best { get; }
     public IReadOnlyList<OptimizationScore> RankedCandidates { get; }
     public int DuplicateCandidatesIgnored { get; }
 }
@@ -131,7 +131,7 @@ public sealed class OptimizationIntelligenceEngine
             .ThenBy(x => x.Candidate.CandidateId, StringComparer.Ordinal)
             .ToArray();
 
-        var best = ranked.FirstOrDefault(x => x.EvidenceSufficient);
+        OptimizationScore? best = ranked.FirstOrDefault(x => x.EvidenceSufficient);
         var status = best == null ? OptimizationStatus.InsufficientEvidence : OptimizationStatus.Ready;
         return new OptimizationResult(status, best, ranked, duplicates);
     }
