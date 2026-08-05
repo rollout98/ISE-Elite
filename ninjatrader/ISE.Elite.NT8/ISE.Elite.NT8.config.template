@@ -19,3 +19,7 @@ ProtectionEnabled=false
 ProtectiveStopTicks=40
 ProtectiveTargetTicks=80
 EmergencyFlattenOnProtectionFailure=true
+
+# Enables one manually armed, intentionally filled Sim101 market entry.
+# Requires ProtectionEnabled=true and SmokeTestEnabled=false.
+ProtectedFillTestEnabled=false
