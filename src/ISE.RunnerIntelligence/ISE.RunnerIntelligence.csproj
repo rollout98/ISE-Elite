@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ISE.MarketNarrative\ISE.MarketNarrative.csproj" />
+    <ProjectReference Include="..\ISE.PullbackIntelligence\ISE.PullbackIntelligence.csproj" />
+  </ItemGroup>
+</Project>
