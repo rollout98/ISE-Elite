@@ -28,10 +28,6 @@
       <HintPath>$(NinjaTraderInstallDir)\bin\NinjaTrader.Gui.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="NinjaTrader.NinjaScript">
-      <HintPath>$(NinjaTraderInstallDir)\bin\NinjaTrader.NinjaScript.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="System.Xaml" />
