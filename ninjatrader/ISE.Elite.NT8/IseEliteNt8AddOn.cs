@@ -9,6 +9,8 @@ namespace NinjaTrader.NinjaScript.AddOns
 {
     public sealed class IseEliteNt8AddOn : AddOnBase
     {
+        private static string? _lastStartFailure;
+
         private NTMenuItem? _controlCenterNewMenu;
         private NTMenuItem? _armSmokeTestMenu;
         private NTMenuItem? _submitSmokeTestMenu;
@@ -89,8 +91,7 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         private void OnArmSmokeTest(object sender, RoutedEventArgs e)
         {
-            var runtime = IseEliteNt8BridgeRegistry.Runtime;
-            if (!TryGetSmokeTestRuntime(runtime))
+            if (!TryGetSmokeTestRuntime(out var runtime))
                 return;
 
             var result = MessageBox.Show(
@@ -122,8 +123,7 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         private void OnSubmitSmokeTest(object sender, RoutedEventArgs e)
         {
-            var runtime = IseEliteNt8BridgeRegistry.Runtime;
-            if (!TryGetSmokeTestRuntime(runtime))
+            if (!TryGetSmokeTestRuntime(out var runtime))
                 return;
 
             var result = MessageBox.Show(
@@ -156,8 +156,7 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         private void OnCancelSmokeTest(object sender, RoutedEventArgs e)
         {
-            var runtime = IseEliteNt8BridgeRegistry.Runtime;
-            if (!TryGetSmokeTestRuntime(runtime))
+            if (!TryGetSmokeTestRuntime(out var runtime))
                 return;
 
             var result = MessageBox.Show(
@@ -182,12 +181,24 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
         }
 
-        private bool TryGetSmokeTestRuntime(IseEliteNt8Runtime? runtime)
+        private bool TryGetSmokeTestRuntime(out IseEliteNt8Runtime? runtime)
         {
+            runtime = IseEliteNt8BridgeRegistry.Runtime;
             if (runtime == null || !runtime.IsStarted)
             {
+                WriteOutput("ISE Elite runtime is unavailable; attempting a safe Sim101 startup retry.");
+                StartBridge();
+                runtime = IseEliteNt8BridgeRegistry.Runtime;
+            }
+
+            if (runtime == null || !runtime.IsStarted)
+            {
+                var detail = string.IsNullOrWhiteSpace(_lastStartFailure)
+                    ? "No startup failure detail was captured."
+                    : _lastStartFailure;
+
                 MessageBox.Show(_controlCenterWindow,
-                    "ISE Elite NT8 runtime is not running.",
+                    "ISE Elite NT8 runtime is not running.\n\n" + detail,
                     "ISE Elite", MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
@@ -222,10 +233,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                 _controlCenterNewMenu.Items.Remove(menuItem);
         }
 
-        private static void StartBridge()
+        private static bool StartBridge()
         {
-            if (IseEliteNt8BridgeRegistry.Runtime != null)
-                return;
+            var existing = IseEliteNt8BridgeRegistry.Runtime;
+            if (existing != null && existing.IsStarted)
+                return true;
 
             try
             {
@@ -244,12 +256,16 @@ namespace NinjaTrader.NinjaScript.AddOns
 
                 runtime.Start();
                 IseEliteNt8BridgeRegistry.Runtime = runtime;
+                _lastStartFailure = null;
                 WriteOutput("ISE Elite NT8 Bridge started in Sim101-only mode.");
+                return true;
             }
             catch (Exception exception)
             {
+                _lastStartFailure = exception.Message;
                 WriteOutput($"ISE Elite NT8 Bridge did not start: {exception.Message}");
                 WriteOutput($"Configuration path: {IseEliteNt8Options.DefaultConfigurationPath}");
+                return false;
             }
         }
 
