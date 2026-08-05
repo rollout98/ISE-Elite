@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ISE.DecisionExplainability\ISE.DecisionExplainability.csproj" />
+    <ProjectReference Include="..\ISE.MarketNarrative\ISE.MarketNarrative.csproj" />
+    <ProjectReference Include="..\ISE.ORBIntelligence\ISE.ORBIntelligence.csproj" />
+    <ProjectReference Include="..\ISE.PullbackIntelligence\ISE.PullbackIntelligence.csproj" />
+    <ProjectReference Include="..\ISE.RunnerIntelligence\ISE.RunnerIntelligence.csproj" />
+    <ProjectReference Include="..\ISE.TradeSupervisor\ISE.TradeSupervisor.csproj" />
+  </ItemGroup>
+</Project>
