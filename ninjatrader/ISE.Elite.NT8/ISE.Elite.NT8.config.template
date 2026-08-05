@@ -7,3 +7,8 @@
 AccountName=Sim101
 InstrumentRoot=MNQ
 InstrumentFullName=MNQ 09-26
+
+# Disabled by default. Do not enable until the configured limit price is
+# non-marketable and has been reviewed immediately before the smoke test.
+SmokeTestEnabled=false
+SmokeTestLimitPrice=0
