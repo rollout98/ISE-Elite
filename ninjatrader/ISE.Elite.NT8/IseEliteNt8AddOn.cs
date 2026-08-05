@@ -15,6 +15,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         private NTMenuItem? _armSmokeTestMenu;
         private NTMenuItem? _submitSmokeTestMenu;
         private NTMenuItem? _cancelSmokeTestMenu;
+        private NTMenuItem? _emergencyFlattenMenu;
         private Window? _controlCenterWindow;
 
         protected override void OnStateChange()
@@ -63,14 +64,21 @@ namespace NinjaTrader.NinjaScript.AddOns
                 Header = "ISE Elite: Cancel Smoke-Test Order",
                 Style = menuStyle
             };
+            _emergencyFlattenMenu = new NTMenuItem
+            {
+                Header = "ISE Elite: EMERGENCY FLATTEN MNQ SIM101",
+                Style = menuStyle
+            };
 
             _armSmokeTestMenu.Click += OnArmSmokeTest;
             _submitSmokeTestMenu.Click += OnSubmitSmokeTest;
             _cancelSmokeTestMenu.Click += OnCancelSmokeTest;
+            _emergencyFlattenMenu.Click += OnEmergencyFlatten;
 
             _controlCenterNewMenu.Items.Add(_armSmokeTestMenu);
             _controlCenterNewMenu.Items.Add(_submitSmokeTestMenu);
             _controlCenterNewMenu.Items.Add(_cancelSmokeTestMenu);
+            _controlCenterNewMenu.Items.Add(_emergencyFlattenMenu);
         }
 
         protected override void OnWindowDestroyed(Window window)
@@ -81,10 +89,12 @@ namespace NinjaTrader.NinjaScript.AddOns
             RemoveMenuItem(_armSmokeTestMenu, OnArmSmokeTest);
             RemoveMenuItem(_submitSmokeTestMenu, OnSubmitSmokeTest);
             RemoveMenuItem(_cancelSmokeTestMenu, OnCancelSmokeTest);
+            RemoveMenuItem(_emergencyFlattenMenu, OnEmergencyFlatten);
 
             _armSmokeTestMenu = null;
             _submitSmokeTestMenu = null;
             _cancelSmokeTestMenu = null;
+            _emergencyFlattenMenu = null;
             _controlCenterNewMenu = null;
             _controlCenterWindow = null;
         }
@@ -117,7 +127,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             catch (Exception exception)
             {
-                ShowSmokeTestError(exception);
+                ShowCommandError("Smoke Test", exception);
             }
         }
 
@@ -126,11 +136,14 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (!TryGetSmokeTestRuntime(out var runtime))
                 return;
 
+            var protectionText = runtime!.ProtectionEnabled
+                ? "If filled, the position must reconcile before ISE submits the configured stop/target OCO pair."
+                : "Protective stop and target submission is disabled. Use a non-marketable price and cancel after acceptance.";
+
             var result = MessageBox.Show(
                 _controlCenterWindow,
-                $"FINAL CONFIRMATION\n\nSubmit BUY LIMIT 1 MNQ to Sim101 at {runtime!.SmokeTestLimitPrice}?\n\n" +
-                "This is a real simulated order. No protective stop or target order will be placed. " +
-                "Use a non-marketable limit price and cancel it after acceptance.",
+                $"FINAL CONFIRMATION\n\nSubmit BUY LIMIT 1 MNQ to Sim101 at {runtime.SmokeTestLimitPrice}?\n\n" +
+                "This is a real simulated order. " + protectionText,
                 "ISE Elite — Submit Sim101 Smoke Test",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Stop);
@@ -145,12 +158,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                     $"Operator submitted smoke-test request {submitted.RequestId} as {submitted.PlatformOrderId}.");
                 MessageBox.Show(_controlCenterWindow,
                     $"Smoke-test order submitted to Sim101.\n\nPlatform order: {submitted.PlatformOrderId}\n" +
-                    "Confirm it in the Orders tab, then use the ISE Elite cancel command.",
+                    "Confirm it in the Orders tab.",
                     "ISE Elite — Order Submitted", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception exception)
             {
-                ShowSmokeTestError(exception);
+                ShowCommandError("Smoke Test", exception);
             }
         }
 
@@ -177,11 +190,41 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             catch (Exception exception)
             {
-                ShowSmokeTestError(exception);
+                ShowCommandError("Smoke Test", exception);
             }
         }
 
-        private bool TryGetSmokeTestRuntime(out IseEliteNt8Runtime? runtime)
+        private void OnEmergencyFlatten(object sender, RoutedEventArgs e)
+        {
+            if (!TryGetRuntime(out var runtime))
+                return;
+
+            var state = runtime!.PositionState;
+            var result = MessageBox.Show(
+                _controlCenterWindow,
+                "EMERGENCY FLATTEN MNQ ON SIM101?\n\n" +
+                $"ISE state: {state.Status}; side={state.ExpectedSide}; quantity={state.ExpectedQuantity}; " +
+                $"brokerSigned={state.BrokerSignedQuantity}.\n\n" +
+                "NinjaTrader will cancel active orders for the configured MNQ contract and close the position.",
+                "ISE Elite — EMERGENCY FLATTEN",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Stop);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            try
+            {
+                runtime.EmergencyFlatten("Operator invoked the Control Center emergency flatten command.");
+                WriteOutput("Operator invoked emergency flatten for MNQ on Sim101.");
+            }
+            catch (Exception exception)
+            {
+                ShowCommandError("Emergency Flatten", exception);
+            }
+        }
+
+        private bool TryGetRuntime(out IseEliteNt8Runtime? runtime)
         {
             runtime = IseEliteNt8BridgeRegistry.Runtime;
             if (runtime == null || !runtime.IsStarted)
@@ -203,11 +246,19 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return false;
             }
 
-            if (!runtime.SmokeTestEnabled)
+            return true;
+        }
+
+        private bool TryGetSmokeTestRuntime(out IseEliteNt8Runtime? runtime)
+        {
+            if (!TryGetRuntime(out runtime))
+                return false;
+
+            if (!runtime!.SmokeTestEnabled)
             {
                 MessageBox.Show(_controlCenterWindow,
                     "The smoke test is disabled. Set SmokeTestEnabled=true and configure a non-marketable " +
-                    "SmokeTestLimitPrice, rebuild, and restart NinjaTrader.",
+                    "SmokeTestLimitPrice, then restart NinjaTrader.",
                     "ISE Elite — Smoke Test Disabled", MessageBoxButton.OK, MessageBoxImage.Information);
                 return false;
             }
@@ -215,12 +266,12 @@ namespace NinjaTrader.NinjaScript.AddOns
             return true;
         }
 
-        private void ShowSmokeTestError(Exception exception)
+        private void ShowCommandError(string command, Exception exception)
         {
-            WriteOutput("Smoke-test command failed: " + exception.Message);
+            WriteOutput(command + " command failed: " + exception.Message);
             MessageBox.Show(_controlCenterWindow,
                 exception.Message,
-                "ISE Elite — Smoke Test Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                "ISE Elite — " + command + " Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
 
         private void RemoveMenuItem(NTMenuItem? menuItem, RoutedEventHandler handler)
@@ -248,7 +299,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                     $"Broker event: {brokerEvent.RequestId} {brokerEvent.State} " +
                     $"filled={brokerEvent.FilledQuantity} avg={brokerEvent.AverageFillPrice}");
                 runtime.ExecutionReceived += execution => WriteOutput(
-                    $"Execution: {execution.ExecutionId} {execution.Instrument} " +
+                    $"Execution: {execution.ExecutionId} {execution.Instrument} {execution.OrderAction} " +
                     $"qty={execution.Quantity} price={execution.Price}");
                 runtime.PositionReceived += position => WriteOutput(
                     $"Position: {position.Instrument} {position.MarketPosition} " +
