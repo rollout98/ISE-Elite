@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ISE.ExecutionCoordinator\ISE.ExecutionCoordinator.csproj" />
+    <ProjectReference Include="..\ISE.NinjaTraderAdapter\ISE.NinjaTraderAdapter.csproj" />
+  </ItemGroup>
+</Project>
