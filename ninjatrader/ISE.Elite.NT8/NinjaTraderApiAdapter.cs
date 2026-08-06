@@ -78,10 +78,16 @@ public sealed class NinjaTraderApiAdapter : INinjaTraderApi, IDisposable
         new Dictionary<string, Order>(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<PlatformOrderUpdate> _pendingOrderUpdates =
         new ConcurrentQueue<PlatformOrderUpdate>();
+    private readonly HashSet<string> _ordersPresentBeforeEmergencyFlatten =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     private Account? _account;
     private int _flushScheduled;
     private bool _started;
+    private bool _emergencyFlattenCaptureActive;
+    private string? _emergencyFlattenInstrument;
+    private string? _emergencyFlattenOrderId;
+    private DateTime _emergencyFlattenCaptureStartedAtUtc;
 
     public NinjaTraderApiAdapter(IseEliteNt8Options options)
     {
@@ -91,6 +97,7 @@ public sealed class NinjaTraderApiAdapter : INinjaTraderApi, IDisposable
     public event Action<PlatformOrderUpdate>? OrderUpdateReceived;
     public event Action<NinjaTraderExecutionSnapshot>? ExecutionReceived;
     public event Action<NinjaTraderPositionSnapshot>? PositionReceived;
+    public event Action<string>? EmergencyFlattenOrderIdentified;
     public event Action<string>? Diagnostic;
 
     public bool IsConnected => _account?.Connection?.Status == ConnectionStatus.Connected;
@@ -139,7 +146,10 @@ public sealed class NinjaTraderApiAdapter : INinjaTraderApi, IDisposable
         }
 
         lock (_sync)
+        {
             _ordersByPlatformId.Clear();
+            ResetEmergencyFlattenCaptureLocked();
+        }
 
         _account = null;
         _started = false;
@@ -259,12 +269,38 @@ public sealed class NinjaTraderApiAdapter : INinjaTraderApi, IDisposable
         Diagnostic?.Invoke($"Cancellation requested for NinjaTrader order {platformOrderId}.");
     }
 
-    public void FlattenConfiguredInstrument()
+    public string? FlattenConfiguredInstrument()
     {
         EnsureStarted();
         var instrument = ResolveConfiguredInstrument(_options.InstrumentFullName);
-        _account!.Flatten(new[] { instrument });
-        Diagnostic?.Invoke($"Emergency flatten requested for {_options.InstrumentFullName} on Sim101.");
+        BeginEmergencyFlattenCapture(instrument.FullName);
+
+        try
+        {
+            _account!.Flatten(new[] { instrument });
+            TryCaptureEmergencyFlattenFromAccountOrders();
+
+            string? platformOrderId;
+            lock (_sync)
+                platformOrderId = _emergencyFlattenOrderId;
+
+            Diagnostic?.Invoke(string.IsNullOrWhiteSpace(platformOrderId)
+                ? $"Emergency flatten requested for {_options.InstrumentFullName} on Sim101; awaiting close-order correlation."
+                : $"Emergency flatten requested for {_options.InstrumentFullName} on Sim101 as {platformOrderId}.");
+
+            return platformOrderId;
+        }
+        catch
+        {
+            ClearEmergencyFlattenCapture();
+            throw;
+        }
+    }
+
+    public void ClearEmergencyFlattenCapture()
+    {
+        lock (_sync)
+            ResetEmergencyFlattenCaptureLocked();
     }
 
     public decimal GetConfiguredTickSize()
@@ -330,7 +366,8 @@ public sealed class NinjaTraderApiAdapter : INinjaTraderApi, IDisposable
         if (string.IsNullOrWhiteSpace(platformOrderId))
             return;
 
-        if (IsIseOrder(e.Order))
+        var emergencyFlattenOrder = TryCaptureEmergencyFlattenOrder(e.Order);
+        if (IsIseOrder(e.Order) || emergencyFlattenOrder)
             TrackOrder(platformOrderId, e.Order);
 
         if (!TryMapOrderState(e.Order.OrderState, out var state))
@@ -374,6 +411,84 @@ public sealed class NinjaTraderApiAdapter : INinjaTraderApi, IDisposable
             DateTime.UtcNow);
 
         Task.Run(() => PositionReceived?.Invoke(snapshot));
+    }
+
+    private void BeginEmergencyFlattenCapture(string instrumentFullName)
+    {
+        var existingOrderIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        lock (_account!.Orders)
+        {
+            foreach (var order in _account.Orders)
+            {
+                if (!string.IsNullOrWhiteSpace(order.OrderId))
+                    existingOrderIds.Add(order.OrderId);
+            }
+        }
+
+        lock (_sync)
+        {
+            ResetEmergencyFlattenCaptureLocked();
+            _emergencyFlattenCaptureActive = true;
+            _emergencyFlattenInstrument = instrumentFullName;
+            _emergencyFlattenCaptureStartedAtUtc = DateTime.UtcNow;
+            foreach (var orderId in existingOrderIds)
+                _ordersPresentBeforeEmergencyFlatten.Add(orderId);
+        }
+    }
+
+    private void TryCaptureEmergencyFlattenFromAccountOrders()
+    {
+        Order[] orders;
+        lock (_account!.Orders)
+            orders = _account.Orders.ToArray();
+
+        foreach (var order in orders)
+        {
+            if (TryCaptureEmergencyFlattenOrder(order))
+                return;
+        }
+    }
+
+    private bool TryCaptureEmergencyFlattenOrder(Order order)
+    {
+        string? identifiedOrderId = null;
+
+        lock (_sync)
+        {
+            if (!_emergencyFlattenCaptureActive || !string.IsNullOrWhiteSpace(_emergencyFlattenOrderId))
+                return false;
+
+            if (DateTime.UtcNow - _emergencyFlattenCaptureStartedAtUtc > TimeSpan.FromSeconds(15))
+            {
+                ResetEmergencyFlattenCaptureLocked();
+                return false;
+            }
+
+            if (order == null || string.IsNullOrWhiteSpace(order.OrderId) ||
+                _ordersPresentBeforeEmergencyFlatten.Contains(order.OrderId) ||
+                !string.Equals(order.Instrument?.FullName, _emergencyFlattenInstrument,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !IsEmergencyFlattenCloseOrder(order))
+                return false;
+
+            _emergencyFlattenOrderId = order.OrderId;
+            _emergencyFlattenCaptureActive = false;
+            _ordersByPlatformId[order.OrderId] = order;
+            identifiedOrderId = order.OrderId;
+        }
+
+        Diagnostic?.Invoke($"Emergency flatten close order identified as {identifiedOrderId}.");
+        EmergencyFlattenOrderIdentified?.Invoke(identifiedOrderId!);
+        return true;
+    }
+
+    private void ResetEmergencyFlattenCaptureLocked()
+    {
+        _emergencyFlattenCaptureActive = false;
+        _emergencyFlattenInstrument = null;
+        _emergencyFlattenOrderId = null;
+        _emergencyFlattenCaptureStartedAtUtc = default;
+        _ordersPresentBeforeEmergencyFlatten.Clear();
     }
 
     private void ScheduleOrderUpdateFlush()
@@ -440,6 +555,13 @@ public sealed class NinjaTraderApiAdapter : INinjaTraderApi, IDisposable
 
     private static bool IsIseProtectiveOrder(Order order) =>
         IsIseOrder(order) && order.Name.StartsWith("ISE-PROTECT-", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsEmergencyFlattenCloseOrder(Order order) =>
+        order != null &&
+        !IsIseOrder(order) &&
+        string.Equals(order.Name, "Close", StringComparison.OrdinalIgnoreCase) &&
+        order.OrderType == OrderType.Market &&
+        order.Quantity > 0;
 
     private static bool IsActiveOrder(OrderState state) =>
         state == OrderState.Submitted || state == OrderState.Accepted ||

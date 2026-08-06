@@ -149,7 +149,8 @@ public sealed class ProtectiveOrderCoordinator
     }
 
     public ProtectiveOrderTransition HandleTransition(ProtectiveOrderKind kind,
-        ProtectivePlatformOrderState state, string platformOrderId)
+        ProtectivePlatformOrderState state, string platformOrderId,
+        bool emergencyFlattenInProgress = false)
     {
         if (string.IsNullOrWhiteSpace(platformOrderId))
             throw new ArgumentException("Platform order ID is required.", nameof(platformOrderId));
@@ -166,6 +167,12 @@ public sealed class ProtectiveOrderCoordinator
         {
             return new ProtectiveOrderTransition(kind, state, platformOrderId, sibling, true,
                 "Protective order rejected; emergency flatten is required while a position remains open.");
+        }
+
+        if (state == ProtectivePlatformOrderState.Cancelled && emergencyFlattenInProgress)
+        {
+            return new ProtectiveOrderTransition(kind, state, platformOrderId, sibling, false,
+                "Protective order cancelled as part of emergency flatten; awaiting the closing execution.");
         }
 
         if (state == ProtectivePlatformOrderState.Cancelled &&
