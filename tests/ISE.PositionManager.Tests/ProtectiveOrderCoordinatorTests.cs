@@ -86,6 +86,21 @@ public sealed class ProtectiveOrderCoordinatorTests
     }
 
     [Fact]
+    public void Cancelled_protection_during_emergency_flatten_is_expected()
+    {
+        var coordinator = ProtectedLong();
+
+        var transition = coordinator.HandleTransition(
+            ProtectiveOrderKind.Target,
+            ProtectivePlatformOrderState.Cancelled,
+            "TARGET-1",
+            emergencyFlattenInProgress: true);
+
+        Assert.False(transition.EmergencyFlattenRequired);
+        Assert.Contains("as part of emergency flatten", transition.Message);
+    }
+
+    [Fact]
     public void Emergency_flatten_uses_authoritative_broker_quantity()
     {
         var manager = Manager();
