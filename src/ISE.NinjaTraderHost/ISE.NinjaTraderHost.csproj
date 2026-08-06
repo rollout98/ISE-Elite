@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ISE.BrokerExecution\ISE.BrokerExecution.csproj" />
+    <ProjectReference Include="..\ISE.PositionManager\ISE.PositionManager.csproj" />
   </ItemGroup>
 </Project>
