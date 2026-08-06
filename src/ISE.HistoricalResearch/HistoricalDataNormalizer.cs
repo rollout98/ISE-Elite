@@ -34,7 +34,7 @@ namespace ISE.HistoricalResearch
 
             foreach (var bar in ordered)
             {
-                var key = bar.TimestampUtc.UtcTicks.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                var key = bar.TimestampUtc.UtcDateTime.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture)
                     + ":" + bar.IntervalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
                 if (!seen.Add(key))
