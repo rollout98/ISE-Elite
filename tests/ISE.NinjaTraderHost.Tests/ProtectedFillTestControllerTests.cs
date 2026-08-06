@@ -57,13 +57,29 @@ public sealed class ProtectedFillTestControllerTests
     }
 
     [Fact]
-    public void Second_submission_is_blocked()
+    public void Armed_test_submits_exactly_one_market_sell()
+    {
+        var broker = new FakeBroker();
+        var controller = new ProtectedFillTestController(broker, true);
+        controller.Arm(ProtectedFillTestController.ConfirmationPhrase, true, true, Now);
+
+        controller.SubmitMarketSell(true, Now);
+
+        Assert.Equal(1, broker.SubmitCount);
+        Assert.Equal(ExecutionSide.Sell, broker.LastRequest!.Side);
+        Assert.Equal(ExecutionOrderType.Market, broker.LastRequest.OrderType);
+        Assert.Equal(1, broker.LastRequest.Quantity);
+        Assert.Equal(ProtectedFillTestState.Submitted, controller.State);
+    }
+
+    [Fact]
+    public void Second_submission_is_blocked_across_directions()
     {
         var controller = Controller();
         controller.Arm(ProtectedFillTestController.ConfirmationPhrase, true, true, Now);
         controller.SubmitMarketBuy(true, Now);
 
-        Assert.Throws<InvalidOperationException>(() => controller.SubmitMarketBuy(true, Now));
+        Assert.Throws<InvalidOperationException>(() => controller.SubmitMarketSell(true, Now));
     }
 
     [Fact]
