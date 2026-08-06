@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ISE.BrokerExecution;
 using ISE.NinjaTraderAdapter;
 using ISE.NinjaTraderHost;
@@ -15,6 +16,8 @@ public sealed class IseEliteNt8Runtime : IDisposable
     private readonly AuthoritativePositionManager _positionManager;
     private readonly ProtectiveOrderCoordinator _protection;
     private readonly object _positionSync = new object();
+    private readonly Dictionary<string, string> _emergencyFlattenRequestByOrder =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     private bool _started;
     private string? _stopOrderId;
@@ -174,7 +177,10 @@ public sealed class IseEliteNt8Runtime : IDisposable
         _api.ClearEmergencyFlattenCapture();
         _api.Stop();
         lock (_positionSync)
+        {
             ResetEmergencyFlattenStateLocked();
+            _emergencyFlattenRequestByOrder.Clear();
+        }
         _started = false;
         Diagnostic?.Invoke("ISE Elite NT8 runtime stopped.");
     }
@@ -204,6 +210,7 @@ public sealed class IseEliteNt8Runtime : IDisposable
             _targetOrderId = recovered.TargetOrderId;
             _protectiveExitInProgress = false;
             ResetEmergencyFlattenStateLocked();
+            _emergencyFlattenRequestByOrder.Clear();
             Diagnostic?.Invoke(
                 $"Position recovery: status={recovered.Status}; side={recovered.ExpectedSide}; " +
                 $"quantity={recovered.ExpectedQuantity}; average={recovered.AveragePrice}.");
@@ -354,14 +361,13 @@ public sealed class IseEliteNt8Runtime : IDisposable
     {
         try
         {
-            bool emergencyFlattenOrder;
+            string? emergencyFlattenRequestId;
             ProtectiveOrderKind? kind = null;
             lock (_positionSync)
             {
-                emergencyFlattenOrder = _emergencyFlattenInProgress &&
-                    !string.IsNullOrWhiteSpace(_emergencyFlattenOrderId) &&
-                    string.Equals(update.PlatformOrderId, _emergencyFlattenOrderId,
-                        StringComparison.OrdinalIgnoreCase);
+                _emergencyFlattenRequestByOrder.TryGetValue(
+                    update.PlatformOrderId,
+                    out emergencyFlattenRequestId);
 
                 if (string.Equals(update.PlatformOrderId, _stopOrderId, StringComparison.OrdinalIgnoreCase))
                     kind = ProtectiveOrderKind.Stop;
@@ -369,9 +375,9 @@ public sealed class IseEliteNt8Runtime : IDisposable
                     kind = ProtectiveOrderKind.Target;
             }
 
-            if (emergencyFlattenOrder)
+            if (!string.IsNullOrWhiteSpace(emergencyFlattenRequestId))
             {
-                HandleEmergencyFlattenOrderUpdate(update);
+                HandleEmergencyFlattenOrderUpdate(update, emergencyFlattenRequestId!);
                 return;
             }
 
@@ -460,25 +466,44 @@ public sealed class IseEliteNt8Runtime : IDisposable
 
         string? requestId;
         bool newlyCorrelated = false;
+        string? conflictMessage = null;
+
         lock (_positionSync)
         {
-            if (!_emergencyFlattenInProgress)
+            if (!_emergencyFlattenInProgress || string.IsNullOrWhiteSpace(_emergencyFlattenRequestId))
                 return;
 
             requestId = _emergencyFlattenRequestId;
-            if (string.IsNullOrWhiteSpace(_emergencyFlattenOrderId))
+            if (_emergencyFlattenRequestByOrder.TryGetValue(platformOrderId, out var existingRequestId) &&
+                !string.Equals(existingRequestId, requestId, StringComparison.OrdinalIgnoreCase))
             {
-                _emergencyFlattenOrderId = platformOrderId;
-                newlyCorrelated = true;
+                conflictMessage =
+                    $"Emergency flatten correlation conflict: platform={platformOrderId}; " +
+                    $"existingRequest={existingRequestId}; observedRequest={requestId}.";
             }
-            else if (!string.Equals(_emergencyFlattenOrderId, platformOrderId,
-                         StringComparison.OrdinalIgnoreCase))
+            else
             {
-                Diagnostic?.Invoke(
-                    $"Emergency flatten correlation conflict: request={requestId}; " +
-                    $"existing={_emergencyFlattenOrderId}; observed={platformOrderId}.");
-                return;
+                _emergencyFlattenRequestByOrder[platformOrderId] = requestId!;
+
+                if (string.IsNullOrWhiteSpace(_emergencyFlattenOrderId))
+                {
+                    _emergencyFlattenOrderId = platformOrderId;
+                    newlyCorrelated = true;
+                }
+                else if (!string.Equals(_emergencyFlattenOrderId, platformOrderId,
+                             StringComparison.OrdinalIgnoreCase))
+                {
+                    conflictMessage =
+                        $"Emergency flatten correlation conflict: request={requestId}; " +
+                        $"existing={_emergencyFlattenOrderId}; observed={platformOrderId}.";
+                }
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(conflictMessage))
+        {
+            Diagnostic?.Invoke(conflictMessage);
+            return;
         }
 
         if (newlyCorrelated)
@@ -488,23 +513,32 @@ public sealed class IseEliteNt8Runtime : IDisposable
         }
     }
 
-    private void HandleEmergencyFlattenOrderUpdate(PlatformOrderUpdate update)
+    private void HandleEmergencyFlattenOrderUpdate(
+        PlatformOrderUpdate update,
+        string requestId)
     {
-        string? requestId;
-        lock (_positionSync)
-            requestId = _emergencyFlattenRequestId;
-
         Diagnostic?.Invoke(
             $"Emergency flatten broker event: request={requestId}; platform={update.PlatformOrderId}; " +
             $"state={update.State}; filled={update.FilledQuantity}; average={update.AverageFillPrice}; {update.Message}");
 
         if (update.State == PlatformOrderState.Rejected || update.State == PlatformOrderState.Cancelled)
         {
+            bool currentEmergencyOrder;
             lock (_positionSync)
-                ResetEmergencyFlattenStateLocked();
-            _api.ClearEmergencyFlattenCapture();
-            Diagnostic?.Invoke(
-                "Emergency flatten closing order did not complete. The position may remain open; invoke Emergency Flatten again immediately.");
+            {
+                currentEmergencyOrder = _emergencyFlattenInProgress &&
+                    string.Equals(_emergencyFlattenOrderId, update.PlatformOrderId,
+                        StringComparison.OrdinalIgnoreCase);
+                if (currentEmergencyOrder)
+                    ResetEmergencyFlattenStateLocked();
+            }
+
+            if (currentEmergencyOrder)
+            {
+                _api.ClearEmergencyFlattenCapture();
+                Diagnostic?.Invoke(
+                    "Emergency flatten closing order did not complete. The position may remain open; invoke Emergency Flatten again immediately.");
+            }
             return;
         }
 
