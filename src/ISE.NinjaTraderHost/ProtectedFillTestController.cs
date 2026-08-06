@@ -74,47 +74,14 @@ public sealed class ProtectedFillTestController
             throw new InvalidOperationException("The protected-fill confirmation phrase is invalid.");
 
         State = ProtectedFillTestState.Armed;
-        Record(State, "Protected-fill test armed for one MNQ market-buy entry.", occurredAt);
+        Record(State, "Protected-fill test armed for one MNQ market entry.", occurredAt);
     }
 
-    public BrokerOrderEvent SubmitMarketBuy(bool accountFlat, DateTime occurredAt)
-    {
-        if (State != ProtectedFillTestState.Armed)
-            throw new InvalidOperationException("The protected-fill test must be armed before submission.");
-        if (!accountFlat)
-            throw new InvalidOperationException("Sim101 is no longer flat; protected-fill entry is blocked.");
-        if (_submissionAttempted)
-            throw new InvalidOperationException("The one-entry protected-fill allowance has already been consumed.");
+    public BrokerOrderEvent SubmitMarketBuy(bool accountFlat, DateTime occurredAt) =>
+        SubmitMarket(ExecutionSide.Buy, accountFlat, occurredAt);
 
-        _submissionAttempted = true;
-        _request = new ExecutionRequest(
-            "PROTECTED-FILL-" + occurredAt.ToUniversalTime().ToString("yyyyMMddHHmmssfff") + "-" +
-                Guid.NewGuid().ToString("N").Substring(0, 8),
-            "SIM101-PROTECTED-FILL",
-            _symbol,
-            ExecutionSide.Buy,
-            1,
-            ExecutionOrderType.Market,
-            null,
-            1m,
-            2m,
-            occurredAt,
-            "MANUAL-SIM101-PROTECTED-FILL-TEST");
-
-        try
-        {
-            var submitted = _broker.Submit(_request, occurredAt);
-            State = ProtectedFillTestState.Submitted;
-            Record(State, "Submitted one MNQ market-buy protected-fill test entry.", occurredAt);
-            return submitted;
-        }
-        catch (Exception exception)
-        {
-            State = ProtectedFillTestState.Faulted;
-            Record(State, "Protected-fill submission failed: " + exception.Message, occurredAt);
-            throw;
-        }
-    }
+    public BrokerOrderEvent SubmitMarketSell(bool accountFlat, DateTime occurredAt) =>
+        SubmitMarket(ExecutionSide.Sell, accountFlat, occurredAt);
 
     public void HandleBrokerEvent(BrokerOrderEvent brokerEvent)
     {
@@ -171,6 +138,50 @@ public sealed class ProtectedFillTestController
         State = ProtectedFillTestState.Completed;
         Record(State, "Protected-fill test completed with Sim101 flat.", occurredAt);
     }
+
+    private BrokerOrderEvent SubmitMarket(ExecutionSide side, bool accountFlat, DateTime occurredAt)
+    {
+        if (side != ExecutionSide.Buy && side != ExecutionSide.Sell)
+            throw new ArgumentOutOfRangeException(nameof(side));
+        if (State != ProtectedFillTestState.Armed)
+            throw new InvalidOperationException("The protected-fill test must be armed before submission.");
+        if (!accountFlat)
+            throw new InvalidOperationException("Sim101 is no longer flat; protected-fill entry is blocked.");
+        if (_submissionAttempted)
+            throw new InvalidOperationException("The one-entry protected-fill allowance has already been consumed.");
+
+        _submissionAttempted = true;
+        _request = new ExecutionRequest(
+            "PROTECTED-FILL-" + occurredAt.ToUniversalTime().ToString("yyyyMMddHHmmssfff") + "-" +
+                Guid.NewGuid().ToString("N").Substring(0, 8),
+            "SIM101-PROTECTED-FILL",
+            _symbol,
+            side,
+            1,
+            ExecutionOrderType.Market,
+            null,
+            1m,
+            2m,
+            occurredAt,
+            "MANUAL-SIM101-PROTECTED-FILL-TEST");
+
+        try
+        {
+            var submitted = _broker.Submit(_request, occurredAt);
+            State = ProtectedFillTestState.Submitted;
+            Record(State, "Submitted one MNQ market-" + SideLabel(side) + " protected-fill test entry.", occurredAt);
+            return submitted;
+        }
+        catch (Exception exception)
+        {
+            State = ProtectedFillTestState.Faulted;
+            Record(State, "Protected-fill submission failed: " + exception.Message, occurredAt);
+            throw;
+        }
+    }
+
+    private static string SideLabel(ExecutionSide side) =>
+        side == ExecutionSide.Buy ? "buy" : "sell";
 
     private void Record(ProtectedFillTestState state, string message, DateTime occurredAt) =>
         _audit.Add(new ProtectedFillTestAuditEntry(state, message, occurredAt));
