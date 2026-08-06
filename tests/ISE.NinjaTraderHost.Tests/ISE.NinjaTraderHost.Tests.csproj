@@ -12,5 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\ISE.NinjaTraderHost\ISE.NinjaTraderHost.csproj" />
+    <ProjectReference Include="..\..\src\ISE.PositionManager\ISE.PositionManager.csproj" />
   </ItemGroup>
 </Project>
