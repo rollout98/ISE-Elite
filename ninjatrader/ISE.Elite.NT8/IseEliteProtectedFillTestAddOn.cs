@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using ISE.BrokerExecution;
 using ISE.Elite.NinjaTrader8;
+using ISE.ExecutionCoordinator;
 using ISE.NinjaTraderHost;
 using ISE.PositionManager;
 using NinjaTrader.Gui.Tools;
@@ -13,7 +14,8 @@ namespace NinjaTrader.NinjaScript.AddOns
     {
         private NTMenuItem? _controlCenterNewMenu;
         private NTMenuItem? _armMenu;
-        private NTMenuItem? _submitMenu;
+        private NTMenuItem? _submitBuyMenu;
+        private NTMenuItem? _submitSellMenu;
         private NTMenuItem? _verifyMenu;
         private Window? _controlCenterWindow;
         private IseEliteNt8Runtime? _subscribedRuntime;
@@ -46,9 +48,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                 Header = "ISE Elite: Arm Protected Fill Test",
                 Style = menuStyle
             };
-            _submitMenu = new NTMenuItem
+            _submitBuyMenu = new NTMenuItem
             {
-                Header = "ISE Elite: Submit 1 MNQ Market Protected Fill",
+                Header = "ISE Elite: Submit BUY 1 MNQ Market Protected Fill",
+                Style = menuStyle
+            };
+            _submitSellMenu = new NTMenuItem
+            {
+                Header = "ISE Elite: Submit SELL 1 MNQ Market Protected Fill",
                 Style = menuStyle
             };
             _verifyMenu = new NTMenuItem
@@ -58,10 +65,12 @@ namespace NinjaTrader.NinjaScript.AddOns
             };
 
             _armMenu.Click += OnArm;
-            _submitMenu.Click += OnSubmit;
+            _submitBuyMenu.Click += OnSubmitBuy;
+            _submitSellMenu.Click += OnSubmitSell;
             _verifyMenu.Click += OnVerify;
             _controlCenterNewMenu.Items.Add(_armMenu);
-            _controlCenterNewMenu.Items.Add(_submitMenu);
+            _controlCenterNewMenu.Items.Add(_submitBuyMenu);
+            _controlCenterNewMenu.Items.Add(_submitSellMenu);
             _controlCenterNewMenu.Items.Add(_verifyMenu);
         }
 
@@ -71,10 +80,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return;
 
             RemoveMenuItem(_armMenu, OnArm);
-            RemoveMenuItem(_submitMenu, OnSubmit);
+            RemoveMenuItem(_submitBuyMenu, OnSubmitBuy);
+            RemoveMenuItem(_submitSellMenu, OnSubmitSell);
             RemoveMenuItem(_verifyMenu, OnVerify);
             _armMenu = null;
-            _submitMenu = null;
+            _submitBuyMenu = null;
+            _submitSellMenu = null;
             _verifyMenu = null;
             _controlCenterNewMenu = null;
             _controlCenterWindow = null;
@@ -93,7 +104,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 $"brokerSigned={state.BrokerSignedQuantity}.\n\n" +
                 $"After a fill, ISE must submit a {options!.ProtectiveStopTicks}-tick stop and " +
                 $"{options.ProtectiveTargetTicks}-tick target as one OCO pair.\n" +
-                "Arming does not submit an order.",
+                "Arming does not submit an order. The Buy and Sell commands share one submission allowance.",
                 "ISE Elite — Arm Protected Fill Test",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
@@ -111,7 +122,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 WriteOutput("Operator armed the protected-fill test. No order was submitted.");
                 MessageBox.Show(_controlCenterWindow,
                     "Protected-fill test armed. No order has been submitted.\n\n" +
-                    "Use the separate Submit command only while monitoring Orders, Positions, and Output 1.",
+                    "Use either the separate Buy or Sell command only while monitoring Orders, Positions, and Output 1.",
                     "ISE Elite — Protected Fill Armed",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
@@ -122,20 +133,27 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
         }
 
-        private void OnSubmit(object sender, RoutedEventArgs e)
+        private void OnSubmitBuy(object sender, RoutedEventArgs e) =>
+            OnSubmit(ExecutionSide.Buy);
+
+        private void OnSubmitSell(object sender, RoutedEventArgs e) =>
+            OnSubmit(ExecutionSide.Sell);
+
+        private void OnSubmit(ExecutionSide side)
         {
             if (!TryGetController(out var runtime, out var controller, out var options))
                 return;
 
+            var sideLabel = side == ExecutionSide.Buy ? "BUY" : "SELL";
             var state = runtime!.PositionState;
             var result = MessageBox.Show(
                 _controlCenterWindow,
                 "FINAL CONFIRMATION\n\n" +
-                "Submit BUY MARKET 1 MNQ to Sim101?\n\n" +
+                $"Submit {sideLabel} MARKET 1 MNQ to Sim101?\n\n" +
                 $"Required protection after fill: stop={options!.ProtectiveStopTicks} ticks; " +
                 $"target={options.ProtectiveTargetTicks} ticks; OCO linked.\n\n" +
                 "This order is expected to fill. Keep the Emergency Flatten command available.",
-                "ISE Elite — Submit Protected Fill",
+                $"ISE Elite — Submit Protected {sideLabel}",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Stop);
 
@@ -144,13 +162,17 @@ namespace NinjaTrader.NinjaScript.AddOns
 
             try
             {
-                var submitted = controller!.SubmitMarketBuy(IsFlat(state), DateTime.UtcNow);
+                var submitted = side == ExecutionSide.Buy
+                    ? controller!.SubmitMarketBuy(IsFlat(state), DateTime.UtcNow)
+                    : controller!.SubmitMarketSell(IsFlat(state), DateTime.UtcNow);
                 WriteOutput(
-                    $"Protected-fill entry submitted: request={submitted.RequestId}; platform={submitted.PlatformOrderId}.");
+                    $"Protected-fill {sideLabel} entry submitted: request={submitted.RequestId}; " +
+                    $"platform={submitted.PlatformOrderId}.");
                 MessageBox.Show(_controlCenterWindow,
-                    $"Protected-fill entry submitted to Sim101.\n\nPlatform order: {submitted.PlatformOrderId}\n" +
+                    $"Protected-fill {sideLabel} entry submitted to Sim101.\n\n" +
+                    $"Platform order: {submitted.PlatformOrderId}\n" +
                     "Watch for the entry fill followed by two working OCO protective orders.",
-                    "ISE Elite — Protected Fill Submitted",
+                    $"ISE Elite — Protected {sideLabel} Submitted",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
