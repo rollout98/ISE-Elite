@@ -2,4 +2,13 @@
 
 Commercial Trading Operating System
 
-Repository initialized.
+## Governing requirements
+
+- [Production Session Supervisor and Daily P&L Governance](docs/production-session-supervisor-and-daily-pnl-governance.md)
+
+## Current development focus
+
+- Sim101-only broker execution and protection
+- directional protected-fill validation
+- emergency flatten and restart recovery
+- deterministic daily P&L and green-day governance
