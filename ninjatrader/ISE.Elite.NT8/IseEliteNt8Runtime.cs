@@ -502,7 +502,7 @@ public sealed class IseEliteNt8Runtime : IDisposable
 
         if (!string.IsNullOrWhiteSpace(conflictMessage))
         {
-            Diagnostic?.Invoke(conflictMessage);
+            Diagnostic?.Invoke(conflictMessage!);
             return;
         }
 
