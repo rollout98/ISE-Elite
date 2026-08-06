@@ -20,7 +20,9 @@ public sealed class IseEliteNt8Runtime : IDisposable
     private string? _stopOrderId;
     private string? _targetOrderId;
     private bool _protectiveExitInProgress;
-    private bool _emergencyFlattenIssued;
+    private bool _emergencyFlattenInProgress;
+    private string? _emergencyFlattenRequestId;
+    private string? _emergencyFlattenOrderId;
 
     public IseEliteNt8Runtime(IseEliteNt8Options options)
     {
@@ -37,6 +39,7 @@ public sealed class IseEliteNt8Runtime : IDisposable
         _api.OrderUpdateReceived += OnPlatformOrderUpdate;
         _api.ExecutionReceived += OnExecutionReceived;
         _api.PositionReceived += OnPositionReceived;
+        _api.EmergencyFlattenOrderIdentified += OnEmergencyFlattenOrderIdentified;
         _api.Diagnostic += OnDiagnostic;
         _host.BrokerEvent += OnBrokerEvent;
     }
@@ -123,18 +126,40 @@ public sealed class IseEliteNt8Runtime : IDisposable
         if (string.IsNullOrWhiteSpace(reason))
             throw new ArgumentException("An emergency flatten reason is required.", nameof(reason));
 
+        var occurredAt = DateTime.UtcNow;
+        var requestId = CreateEmergencyFlattenRequestId(occurredAt);
+
         lock (_positionSync)
         {
             if (_positionManager.Current.ExpectedQuantity == 0 &&
                 _positionManager.Current.BrokerSignedQuantity == 0)
                 throw new InvalidOperationException("Sim101 is already flat for the configured instrument.");
+            if (_emergencyFlattenInProgress)
+                throw new InvalidOperationException("An emergency flatten is already in progress.");
 
-            _protection.CreateEmergencyFlatten(reason, DateTime.UtcNow);
-            _emergencyFlattenIssued = true;
+            _protection.CreateEmergencyFlatten(reason, occurredAt);
+            _emergencyFlattenInProgress = true;
+            _emergencyFlattenRequestId = requestId;
+            _emergencyFlattenOrderId = null;
         }
 
-        _api.FlattenConfiguredInstrument();
-        Diagnostic?.Invoke("Emergency flatten routed to NinjaTrader: " + reason);
+        try
+        {
+            var platformOrderId = _api.FlattenConfiguredInstrument();
+            if (!string.IsNullOrWhiteSpace(platformOrderId))
+                CorrelateEmergencyFlattenOrder(platformOrderId!);
+
+            Diagnostic?.Invoke(
+                $"Emergency flatten routed to NinjaTrader: request={requestId}; " +
+                $"platform={(string.IsNullOrWhiteSpace(platformOrderId) ? "pending" : platformOrderId)}; {reason}");
+        }
+        catch
+        {
+            lock (_positionSync)
+                ResetEmergencyFlattenStateLocked();
+            _api.ClearEmergencyFlattenCapture();
+            throw;
+        }
     }
 
     public void Stop()
@@ -146,7 +171,10 @@ public sealed class IseEliteNt8Runtime : IDisposable
         }
 
         _host.Stop();
+        _api.ClearEmergencyFlattenCapture();
         _api.Stop();
+        lock (_positionSync)
+            ResetEmergencyFlattenStateLocked();
         _started = false;
         Diagnostic?.Invoke("ISE Elite NT8 runtime stopped.");
     }
@@ -156,6 +184,7 @@ public sealed class IseEliteNt8Runtime : IDisposable
         _api.OrderUpdateReceived -= OnPlatformOrderUpdate;
         _api.ExecutionReceived -= OnExecutionReceived;
         _api.PositionReceived -= OnPositionReceived;
+        _api.EmergencyFlattenOrderIdentified -= OnEmergencyFlattenOrderIdentified;
         _api.Diagnostic -= OnDiagnostic;
         _host.BrokerEvent -= OnBrokerEvent;
         Stop();
@@ -174,7 +203,7 @@ public sealed class IseEliteNt8Runtime : IDisposable
             _stopOrderId = recovered.StopOrderId;
             _targetOrderId = recovered.TargetOrderId;
             _protectiveExitInProgress = false;
-            _emergencyFlattenIssued = false;
+            ResetEmergencyFlattenStateLocked();
             Diagnostic?.Invoke(
                 $"Position recovery: status={recovered.Status}; side={recovered.ExpectedSide}; " +
                 $"quantity={recovered.ExpectedQuantity}; average={recovered.AveragePrice}.");
@@ -207,13 +236,10 @@ public sealed class IseEliteNt8Runtime : IDisposable
                         $"price={execution.Price}; expected={result.ExpectedSide} {result.ExpectedQuantity}.");
 
                     if (result.ExpectedQuantity == 0)
-                    {
-                        _stopOrderId = null;
-                        _targetOrderId = null;
                         _protectiveExitInProgress = false;
-                        _emergencyFlattenIssued = false;
-                    }
                 }
+
+                TryCompleteEmergencyFlatten();
             }
         }
         catch (Exception exception)
@@ -251,6 +277,8 @@ public sealed class IseEliteNt8Runtime : IDisposable
                 {
                     EnsureProtectiveOrders();
                 }
+
+                TryCompleteEmergencyFlatten();
             }
         }
         catch (Exception exception)
@@ -271,6 +299,9 @@ public sealed class IseEliteNt8Runtime : IDisposable
         ProtectiveOrderPair? pair = null;
         lock (_positionSync)
         {
+            if (_emergencyFlattenInProgress)
+                return;
+
             var current = _positionManager.Current;
             if (current.Status != PositionManagerStatus.OpenUnprotected || current.ExpectedQuantity == 0)
                 return;
@@ -323,13 +354,25 @@ public sealed class IseEliteNt8Runtime : IDisposable
     {
         try
         {
+            bool emergencyFlattenOrder;
             ProtectiveOrderKind? kind = null;
             lock (_positionSync)
             {
+                emergencyFlattenOrder = _emergencyFlattenInProgress &&
+                    !string.IsNullOrWhiteSpace(_emergencyFlattenOrderId) &&
+                    string.Equals(update.PlatformOrderId, _emergencyFlattenOrderId,
+                        StringComparison.OrdinalIgnoreCase);
+
                 if (string.Equals(update.PlatformOrderId, _stopOrderId, StringComparison.OrdinalIgnoreCase))
                     kind = ProtectiveOrderKind.Stop;
                 else if (string.Equals(update.PlatformOrderId, _targetOrderId, StringComparison.OrdinalIgnoreCase))
                     kind = ProtectiveOrderKind.Target;
+            }
+
+            if (emergencyFlattenOrder)
+            {
+                HandleEmergencyFlattenOrderUpdate(update);
+                return;
             }
 
             if (kind.HasValue)
@@ -363,12 +406,24 @@ public sealed class IseEliteNt8Runtime : IDisposable
             if (state == ProtectivePlatformOrderState.Filled)
                 _protectiveExitInProgress = true;
 
-            transition = _protection.HandleTransition(kind, state, update.PlatformOrderId);
+            transition = _protection.HandleTransition(
+                kind,
+                state,
+                update.PlatformOrderId,
+                _emergencyFlattenInProgress);
 
             if (state == ProtectivePlatformOrderState.Cancelled && _protectiveExitInProgress)
             {
                 transition = new ProtectiveOrderTransition(kind, state, update.PlatformOrderId,
                     null, false, "OCO sibling cancellation confirmed after protective exit.");
+            }
+
+            if (IsProtectiveTerminal(state))
+            {
+                if (kind == ProtectiveOrderKind.Stop)
+                    _stopOrderId = null;
+                else
+                    _targetOrderId = null;
             }
         }
 
@@ -391,18 +446,112 @@ public sealed class IseEliteNt8Runtime : IDisposable
 
         if (transition.EmergencyFlattenRequired && _options.EmergencyFlattenOnProtectionFailure)
             TryEmergencyFlatten(transition.Message);
+
+        TryCompleteEmergencyFlatten();
+    }
+
+    private void OnEmergencyFlattenOrderIdentified(string platformOrderId) =>
+        CorrelateEmergencyFlattenOrder(platformOrderId);
+
+    private void CorrelateEmergencyFlattenOrder(string platformOrderId)
+    {
+        if (string.IsNullOrWhiteSpace(platformOrderId))
+            return;
+
+        string? requestId;
+        bool newlyCorrelated = false;
+        lock (_positionSync)
+        {
+            if (!_emergencyFlattenInProgress)
+                return;
+
+            requestId = _emergencyFlattenRequestId;
+            if (string.IsNullOrWhiteSpace(_emergencyFlattenOrderId))
+            {
+                _emergencyFlattenOrderId = platformOrderId;
+                newlyCorrelated = true;
+            }
+            else if (!string.Equals(_emergencyFlattenOrderId, platformOrderId,
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                Diagnostic?.Invoke(
+                    $"Emergency flatten correlation conflict: request={requestId}; " +
+                    $"existing={_emergencyFlattenOrderId}; observed={platformOrderId}.");
+                return;
+            }
+        }
+
+        if (newlyCorrelated)
+        {
+            Diagnostic?.Invoke(
+                $"Emergency flatten order correlated: request={requestId}; platform={platformOrderId}.");
+        }
+    }
+
+    private void HandleEmergencyFlattenOrderUpdate(PlatformOrderUpdate update)
+    {
+        string? requestId;
+        lock (_positionSync)
+            requestId = _emergencyFlattenRequestId;
+
+        Diagnostic?.Invoke(
+            $"Emergency flatten broker event: request={requestId}; platform={update.PlatformOrderId}; " +
+            $"state={update.State}; filled={update.FilledQuantity}; average={update.AverageFillPrice}; {update.Message}");
+
+        if (update.State == PlatformOrderState.Rejected || update.State == PlatformOrderState.Cancelled)
+        {
+            lock (_positionSync)
+                ResetEmergencyFlattenStateLocked();
+            _api.ClearEmergencyFlattenCapture();
+            Diagnostic?.Invoke(
+                "Emergency flatten closing order did not complete. The position may remain open; invoke Emergency Flatten again immediately.");
+            return;
+        }
+
+        TryCompleteEmergencyFlatten();
+    }
+
+    private void TryCompleteEmergencyFlatten()
+    {
+        string? requestId = null;
+        string? platformOrderId = null;
+        bool completed = false;
+
+        lock (_positionSync)
+        {
+            if (!_emergencyFlattenInProgress)
+                return;
+
+            var current = _positionManager.Current;
+            if (current.ExpectedQuantity != 0 || current.BrokerSignedQuantity != 0 ||
+                !string.IsNullOrWhiteSpace(_stopOrderId) ||
+                !string.IsNullOrWhiteSpace(_targetOrderId))
+                return;
+
+            requestId = _emergencyFlattenRequestId;
+            platformOrderId = _emergencyFlattenOrderId;
+            ResetEmergencyFlattenStateLocked();
+            completed = true;
+        }
+
+        if (!completed)
+            return;
+
+        _api.ClearEmergencyFlattenCapture();
+        Diagnostic?.Invoke(
+            $"Emergency flatten completed: request={requestId}; platform={platformOrderId}; " +
+            "position=Flat; protectiveOrders=0.");
     }
 
     private void TryEmergencyFlatten(string reason)
     {
         lock (_positionSync)
         {
-            if (_emergencyFlattenIssued)
+            if (_emergencyFlattenInProgress)
                 return;
             if (_positionManager.Current.ExpectedQuantity == 0 &&
                 _positionManager.Current.BrokerSignedQuantity == 0)
                 return;
-            _emergencyFlattenIssued = true;
         }
 
         try
@@ -413,6 +562,13 @@ public sealed class IseEliteNt8Runtime : IDisposable
         {
             Diagnostic?.Invoke("Emergency flatten failed: " + exception.Message);
         }
+    }
+
+    private void ResetEmergencyFlattenStateLocked()
+    {
+        _emergencyFlattenInProgress = false;
+        _emergencyFlattenRequestId = null;
+        _emergencyFlattenOrderId = null;
     }
 
     private void OnDiagnostic(string message) => Diagnostic?.Invoke(message);
@@ -450,6 +606,15 @@ public sealed class IseEliteNt8Runtime : IDisposable
         PlatformOrderState.Rejected => ProtectivePlatformOrderState.Rejected,
         _ => throw new ArgumentOutOfRangeException(nameof(state))
     };
+
+    private static bool IsProtectiveTerminal(ProtectivePlatformOrderState state) =>
+        state == ProtectivePlatformOrderState.Filled ||
+        state == ProtectivePlatformOrderState.Cancelled ||
+        state == ProtectivePlatformOrderState.Rejected;
+
+    private static string CreateEmergencyFlattenRequestId(DateTime occurredAt) =>
+        "EMERGENCY-FLATTEN-" + occurredAt.ToString("yyyyMMddHHmmssfff") + "-" +
+        Guid.NewGuid().ToString("N").Substring(0, 8);
 
     private void EnsureStarted()
     {
