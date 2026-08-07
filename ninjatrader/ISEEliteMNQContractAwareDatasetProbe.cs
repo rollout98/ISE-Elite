@@ -1,5 +1,7 @@
 // Supervised, read-only NinjaTrader 8 contract-aware MNQ dataset probe for ISE Elite Historical Research.
 // Uses observed June 2026 volume crossover to preserve contract identity across the rollover.
+// Historical acquisition is deliberately chunked by Central calendar day because supervised comparison
+// showed that one large multi-week BarsRequest can return incomplete days even when per-day requests are full.
 // It does not submit, change, cancel, or flatten orders.
 
 using System;
@@ -50,14 +52,11 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             try
             {
-                Print("ISE-CONTRACT-DATASET START fromCentral=2026-06-01 toCentral=2026-08-01 rolloverBoundary=2026-06-15 window=06:00-11:00 interval=60s source=Repository");
+                Print("ISE-CONTRACT-DATASET START fromCentral=2026-06-01 toCentral=2026-08-01 rolloverBoundary=2026-06-15 window=06:00-11:00 interval=60s source=Repository acquisition=daily-chunks");
 
                 var client = new ISEEliteHistoricalBarsRequestClient(TimeSpan.FromSeconds(120));
-                var june = Request(client, "MNQ 06-26", RequestedFromCentral, RolloverBoundaryCentral);
-                var september = Request(client, "MNQ 09-26", RolloverBoundaryCentral, RequestedToCentral);
-
-                var juneSelected = SelectWindow(june, RequestedFromCentral, RolloverBoundaryCentral);
-                var septemberSelected = SelectWindow(september, RolloverBoundaryCentral, RequestedToCentral);
+                var juneSelected = RequestSelectedDays(client, "MNQ 06-26", RequestedFromCentral, RolloverBoundaryCentral);
+                var septemberSelected = RequestSelectedDays(client, "MNQ 09-26", RolloverBoundaryCentral, RequestedToCentral);
 
                 var combined = juneSelected
                     .Select(x => new ContractBar("MNQ", "06-26", x))
@@ -67,6 +66,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 if (combined.Count == 0)
                     throw new InvalidOperationException("Contract-aware dataset selected zero bars.");
+
+                ValidateUniqueTimestamps(combined);
 
                 var sessions = combined.GroupBy(x => x.Record.TimestampLocal.Date).OrderBy(x => x.Key).ToList();
                 var expectedBars = (int)(NyWindowEnd - NyWindowStart).TotalMinutes;
@@ -99,24 +100,41 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        private static IReadOnlyList<NinjaTraderHistoricalBarRecord> Request(ISEEliteHistoricalBarsRequestClient client, string instrument, DateTime from, DateTime to)
+        private static List<NinjaTraderHistoricalBarRecord> RequestSelectedDays(
+            ISEEliteHistoricalBarsRequestClient client,
+            string instrument,
+            DateTime from,
+            DateTime to)
         {
-            return client.Request(new NinjaTraderHistoricalBarsRequest(
-                instrument,
-                from,
-                to,
-                IntervalSeconds,
-                NinjaTraderHistoricalLookupPolicy.Repository,
-                TradingHoursTemplate));
+            var selected = new List<NinjaTraderHistoricalBarRecord>();
+
+            for (var day = from.Date; day < to.Date; day = day.AddDays(1))
+            {
+                var nextDay = day.AddDays(1);
+                var records = client.Request(new NinjaTraderHistoricalBarsRequest(
+                    instrument,
+                    day,
+                    nextDay,
+                    IntervalSeconds,
+                    NinjaTraderHistoricalLookupPolicy.Repository,
+                    TradingHoursTemplate));
+
+                selected.AddRange(records
+                    .Where(x => x.TimestampLocal >= day && x.TimestampLocal < nextDay)
+                    .Where(x => x.TimestampLocal.TimeOfDay >= NyWindowStart && x.TimestampLocal.TimeOfDay < NyWindowEnd));
+            }
+
+            return selected.OrderBy(x => x.TimestampLocal).ToList();
         }
 
-        private static List<NinjaTraderHistoricalBarRecord> SelectWindow(IReadOnlyList<NinjaTraderHistoricalBarRecord> records, DateTime from, DateTime to)
+        private static void ValidateUniqueTimestamps(IReadOnlyList<ContractBar> bars)
         {
-            return records
-                .Where(x => x.TimestampLocal >= from && x.TimestampLocal < to)
-                .Where(x => x.TimestampLocal.TimeOfDay >= NyWindowStart && x.TimestampLocal.TimeOfDay < NyWindowEnd)
-                .OrderBy(x => x.TimestampLocal)
-                .ToList();
+            var duplicate = bars
+                .GroupBy(x => x.Record.TimestampLocal)
+                .FirstOrDefault(x => x.Count() > 1);
+
+            if (duplicate != null)
+                throw new InvalidOperationException("Duplicate contract-aware timestamp detected: " + duplicate.Key.ToString("O"));
         }
 
         private static void Write(string path, IReadOnlyList<ContractBar> bars, TimeZoneInfo centralTimeZone)
@@ -169,6 +187,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Contract = contract;
                 Record = record;
             }
+
             public string Instrument { get; }
             public string Contract { get; }
             public NinjaTraderHistoricalBarRecord Record { get; }
