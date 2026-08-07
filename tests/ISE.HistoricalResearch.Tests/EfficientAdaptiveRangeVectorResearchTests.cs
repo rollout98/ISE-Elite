@@ -34,10 +34,10 @@ namespace ISE.HistoricalResearch.Tests
 
             Assert.NotEmpty(combine);
             Assert.NotEmpty(funded);
-            Assert.All(combine.Where(x => x.Selected), x => Assert.True(x.InitialRiskTicks <= 40m));
-            Assert.All(funded.Where(x => x.Selected), x => Assert.True(x.InitialRiskTicks <= 30m));
-            Assert.All(combine.Where(x => x.Selected), x => Assert.True(x.EntryUtc >= x.Source.EntryUtc));
-            Assert.All(funded.Where(x => x.Selected), x => Assert.True(x.EntryUtc >= x.Source.EntryUtc));
+            Assert.All(combine.Where(x => x.Selected), x => Assert.True(x.InitialRiskTicks!.Value <= 40m));
+            Assert.All(funded.Where(x => x.Selected), x => Assert.True(x.InitialRiskTicks!.Value <= 30m));
+            Assert.All(combine.Where(x => x.Selected), x => Assert.True(x.EntryUtc!.Value >= x.Source.EntryUtc));
+            Assert.All(funded.Where(x => x.Selected), x => Assert.True(x.EntryUtc!.Value >= x.Source.EntryUtc));
         }
 
         [Fact]
@@ -54,7 +54,7 @@ namespace ISE.HistoricalResearch.Tests
             {
                 Assert.True(x.Source.InitialRiskTicks > cap);
                 Assert.True(x.DeferralMinutes > 0);
-                Assert.True(x.InitialRiskTicks <= cap);
+                Assert.True(x.InitialRiskTicks!.Value <= cap);
             });
         }
 
