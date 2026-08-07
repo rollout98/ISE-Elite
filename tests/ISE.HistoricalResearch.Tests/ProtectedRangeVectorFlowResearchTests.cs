@@ -14,7 +14,7 @@ namespace ISE.HistoricalResearch.Tests
             var bars = BuildReversalSession(new DateTime(2026, 7, 27));
             var indicator = TestIndicatorConfig();
             var raw = new RangeEntryVectorFlowHoldAnalyzer(indicator).Analyze(bars);
-            var protectedRows = new ProtectedRangeVectorAnalyzer(new ProtectedRangeVectorConfig(indicator)).Analyze(bars);
+            var protectedRows = new ProtectedRangeVectorAnalyzer(TestProtectedConfig()).Analyze(bars);
 
             Assert.Equal(raw.Count, protectedRows.Count);
             Assert.Equal(raw.Select(x => x.EntryUtc), protectedRows.Select(x => x.Source.EntryUtc));
@@ -25,7 +25,7 @@ namespace ISE.HistoricalResearch.Tests
         public void RiskQualificationUsesExistingCombineAndFundedCaps()
         {
             var bars = BuildReversalSession(new DateTime(2026, 7, 28));
-            var rows = new ProtectedRangeVectorAnalyzer(new ProtectedRangeVectorConfig(TestIndicatorConfig())).Analyze(bars);
+            var rows = new ProtectedRangeVectorAnalyzer(TestProtectedConfig()).Analyze(bars);
 
             Assert.NotEmpty(rows);
             Assert.All(rows, x => Assert.Equal(x.Source.InitialRiskTicks <= 325m, x.CombineRiskQualified));
@@ -36,7 +36,7 @@ namespace ISE.HistoricalResearch.Tests
         public void ExtensionRequiresRangeScalpObjectiveAndPriorVectorAlignment()
         {
             var bars = BuildReversalSession(new DateTime(2026, 7, 29));
-            var rows = new ProtectedRangeVectorAnalyzer(new ProtectedRangeVectorConfig(TestIndicatorConfig())).Analyze(bars);
+            var rows = new ProtectedRangeVectorAnalyzer(TestProtectedConfig()).Analyze(bars);
             var extended = rows.Where(x => x.ProtectedHold.ExtensionActivated).ToList();
 
             Assert.NotEmpty(extended);
@@ -48,12 +48,18 @@ namespace ISE.HistoricalResearch.Tests
         public void ExtendedWinnerCannotFallBackToOriginalStructuralLossOnContinuousBars()
         {
             var bars = BuildReversalSession(new DateTime(2026, 7, 30));
-            var rows = new ProtectedRangeVectorAnalyzer(new ProtectedRangeVectorConfig(TestIndicatorConfig())).Analyze(bars);
+            var rows = new ProtectedRangeVectorAnalyzer(TestProtectedConfig()).Analyze(bars);
             var extended = rows.Where(x => x.ProtectedHold.ExtensionActivated).ToList();
 
             Assert.NotEmpty(extended);
             Assert.All(extended, x => Assert.True(x.ProtectedHold.BreakevenActivated));
             Assert.All(extended, x => Assert.True(x.ProtectedHold.RealizedDollars >= 0m));
+        }
+
+        private static ProtectedRangeVectorConfig TestProtectedConfig()
+        {
+            return new ProtectedRangeVectorConfig(TestIndicatorConfig(), breakevenTriggerTicks: 10,
+                maxPullbackPercent: 75m, minimumPeakTicksForPullbackProtection: 5, runnerTrailTicks: 15);
         }
 
         private static RangeEntryVectorFlowHoldConfig TestIndicatorConfig()
