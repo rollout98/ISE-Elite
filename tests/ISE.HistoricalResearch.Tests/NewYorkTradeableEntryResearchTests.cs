@@ -73,7 +73,7 @@ namespace ISE.HistoricalResearch.Tests
                 NewYorkResearchDirection.Long, NewYorkResearchDirection.Short, bars[15].TimestampUtc, bars[16].TimestampUtc,
                 16m, 12m, 0.75m, 0m, 0m, null, null);
 
-            var outcome = Assert.Single(new NewYorkTradeableEntryAnalyzer(new NewYorkTradeableEntryConfig(lowerObjective: 20m, upperObjective: 40m)).Analyze(bars, new[] { transition }));
+            var outcome = Assert.Single(new NewYorkTradeableEntryAnalyzer(new NewYorkTradeableEntryConfig(lowerObjective: 80m, upperObjective: 160m)).Analyze(bars, new[] { transition }));
             Assert.True(outcome.HasEntry);
             Assert.Equal(NewYorkTradeSequenceResult.StopFirst, outcome.SequenceResult);
         }
