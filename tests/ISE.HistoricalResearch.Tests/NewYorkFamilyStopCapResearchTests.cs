@@ -29,7 +29,7 @@ namespace ISE.HistoricalResearch.Tests
             var analyzer = new NewYorkFamilyStopCapAnalyzer(new NewYorkFamilyStopCapConfig(new[] { 200m, 250m }));
             var outcomes = analyzer.Analyze(rows);
 
-            var direct200 = Assert.Single(outcomes.Where(x => x.EntryType == NewYorkTradeableEntryType.DirectReversal && x.CapTicks == 200m));
+            var direct200 = Assert.Single(outcomes, x => x.EntryType == NewYorkTradeableEntryType.DirectReversal && x.CapTicks == 200m);
             Assert.Equal(3, direct200.TotalCandidates);
             Assert.Equal(1, direct200.RetainedCandidates);
             Assert.Equal(2, direct200.ExcludedCandidates);
@@ -37,7 +37,7 @@ namespace ISE.HistoricalResearch.Tests
             Assert.Equal(1, direct200.ExcludedHit500);
             Assert.Equal(1, direct200.ExcludedHit1000);
 
-            var direct250 = Assert.Single(outcomes.Where(x => x.EntryType == NewYorkTradeableEntryType.DirectReversal && x.CapTicks == 250m));
+            var direct250 = Assert.Single(outcomes, x => x.EntryType == NewYorkTradeableEntryType.DirectReversal && x.CapTicks == 250m);
             Assert.Equal(2, direct250.RetainedCandidates);
             Assert.Equal(2, direct250.Hit500BeforeStop);
             Assert.Equal(1, direct250.Hit1000BeforeStop);
