@@ -32,6 +32,8 @@ The final supervised daily-chunk run produced:
 - first session 2026-06-01
 - last session 2026-07-31
 
+These values are runtime observations from the supervised NinjaTrader probe. The cross-platform validator below is the independent repository-level gate for the persisted TSV.
+
 ## Output file
 
 The accepted runtime path is:
@@ -52,7 +54,7 @@ The validation CLI loads the generated TSV through the Historical Research libra
 dotnet run --project .\tools\ISE.HistoricalResearch.DatasetValidator -- "C:\Users\dlewi\OneDrive\Documents\NinjaTrader 8\ISEEliteResearch\ny-MNQ-contract-aware-20260601-20260731-0600-1100-60s-repository.tsv"
 ```
 
-For the accepted runtime dataset, the expected coverage result is 12,600 bars, 42 sessions, zero partial sessions, and two one-way contract segments (`06-26` then `09-26`).
+For the supervised runtime dataset, the expected validation result is 12,600 bars, 42 sessions, zero partial sessions, and two one-way contract segments (`06-26` then `09-26`). The persisted file is not considered formally accepted until this command reproduces those results.
 
 ## Acceptance gate
 
