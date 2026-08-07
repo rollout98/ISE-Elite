@@ -47,38 +47,50 @@ namespace NinjaTrader.NinjaScript.Indicators
             var fromLocal = todayLocal.AddDays(-1);
             var toLocal = todayLocal;
 
-            Print("ISE-HIST-PROBE START instrument=" + instrumentFullName
-                + " fromLocal=" + fromLocal.ToString("yyyy-MM-dd HH:mm:ss")
-                + " toLocal=" + toLocal.ToString("yyyy-MM-dd HH:mm:ss")
-                + " interval=60s source=Provider tradingHours=CME US Index Futures ETH");
-
-            Task.Run(() => RunRequest(instrumentFullName, fromLocal, toLocal));
+            Task.Run(() =>
+            {
+                RunRequest(instrumentFullName, fromLocal, toLocal, NinjaTraderHistoricalLookupPolicy.Provider);
+                RunRequest(instrumentFullName, fromLocal, toLocal, NinjaTraderHistoricalLookupPolicy.Repository);
+            });
         }
 
-        private void RunRequest(string instrumentFullName, DateTime fromLocal, DateTime toLocal)
+        private void RunRequest(
+            string instrumentFullName,
+            DateTime fromLocal,
+            DateTime toLocal,
+            NinjaTraderHistoricalLookupPolicy lookupPolicy)
         {
+            var sourceName = lookupPolicy == NinjaTraderHistoricalLookupPolicy.Provider ? "Provider" : "Repository";
+
             try
             {
+                Print("ISE-HIST-PROBE START instrument=" + instrumentFullName
+                    + " fromLocal=" + fromLocal.ToString("yyyy-MM-dd HH:mm:ss")
+                    + " toLocal=" + toLocal.ToString("yyyy-MM-dd HH:mm:ss")
+                    + " interval=60s source=" + sourceName
+                    + " tradingHours=CME US Index Futures ETH");
+
                 var client = new ISEEliteHistoricalBarsRequestClient(TimeSpan.FromSeconds(60));
                 var request = new NinjaTraderHistoricalBarsRequest(
                     instrumentFullName,
                     fromLocal,
                     toLocal,
                     60,
-                    NinjaTraderHistoricalLookupPolicy.Provider,
+                    lookupPolicy,
                     "CME US Index Futures ETH");
 
                 var records = client.Request(request);
                 if (records == null || records.Count == 0)
                 {
-                    Print("ISE-HIST-PROBE RESULT count=0 source=Provider");
+                    Print("ISE-HIST-PROBE RESULT count=0 source=" + sourceName);
                     return;
                 }
 
                 var first = records[0];
                 var last = records[records.Count - 1];
                 Print("ISE-HIST-PROBE RESULT count=" + records.Count
-                    + " source=Provider first=" + first.TimestampLocal.ToString("yyyy-MM-dd HH:mm:ss")
+                    + " source=" + sourceName
+                    + " first=" + first.TimestampLocal.ToString("yyyy-MM-dd HH:mm:ss")
                     + " last=" + last.TimestampLocal.ToString("yyyy-MM-dd HH:mm:ss")
                     + " firstClose=" + first.Close
                     + " lastClose=" + last.Close
@@ -87,7 +99,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
             catch (Exception ex)
             {
-                Print("ISE-HIST-PROBE ERROR " + ex.GetType().Name + ": " + ex.Message);
+                Print("ISE-HIST-PROBE ERROR source=" + sourceName + " " + ex.GetType().Name + ": " + ex.Message);
             }
         }
     }
