@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using ISE.HistoricalResearch;
 
@@ -6,6 +7,9 @@ namespace ISE.HistoricalResearch.RangeVectorFlowStudy
 {
     internal static class Program
     {
+        private static readonly DateTime ResearchStartCentral = new DateTime(2026, 6, 1, 3, 0, 0, DateTimeKind.Unspecified);
+        private static readonly DateTime ResearchEndCentral = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
         private static int Main(string[] args)
         {
             if (args.Length != 1)
@@ -18,72 +22,97 @@ namespace ISE.HistoricalResearch.RangeVectorFlowStudy
             {
                 var bars = new HistoricalDataFileStore().ReadContractAware(args[0]);
                 var central = ResolveCentralTimeZone();
-                var hasEveningWarmup = bars.Any(x => TimeZoneInfo.ConvertTime(x.TimestampUtc, central).TimeOfDay >= new TimeSpan(17, 0, 0));
-                if (!hasEveningWarmup)
-                    throw new InvalidOperationException("Dataset does not contain the full-session evening warmup required for the 3-minute Range Filter and 5-minute VectorFlow state.");
+                var warmupBars = bars.Count(x => TimeZoneInfo.ConvertTime(x.TimestampUtc, central).DateTime < ResearchStartCentral);
+                if (warmupBars < 1200)
+                    throw new InvalidOperationException("Dataset needs at least 1,200 one-minute pre-June warmup bars before 2026-06-01 03:00 CT. Regenerate it with ISEEliteMNQIndicatorLogicDatasetProbe.");
 
-                var rows = new RangeEntryVectorFlowHoldAnalyzer().Analyze(bars);
-                Console.WriteLine("ISE-RANGE-VECTOR RESULT entries=" + rows.Count
-                    + " alignedAtEntry=" + rows.Count(x => x.AlignedAtEntry)
-                    + " alignedBeforeScalp=" + rows.Count(x => x.AlignedBeforeScalpExit)
-                    + " avgRiskTicks=" + Avg(rows.Select(x => x.InitialRiskTicks)).ToString("0.0")
-                    + " controlAvg=" + Avg(rows.Select(x => x.RangeOnlyControl.RealizedDollars)).ToString("0.0")
-                    + " vectorAvg=" + Avg(rows.Select(x => x.VectorFlowHold.RealizedDollars)).ToString("0.0")
-                    + " avgDelta=" + Avg(rows.Select(x => x.VectorFlowImprovementDollars)).ToString("0.0")
-                    + " controlGreen=" + rows.Count(x => x.RangeOnlyControl.RealizedDollars > 0m)
-                    + " vectorGreen=" + rows.Count(x => x.VectorFlowHold.RealizedDollars > 0m)
-                    + " vectorBetter=" + rows.Count(x => x.VectorFlowImprovementDollars > 0m)
-                    + " vectorWorse=" + rows.Count(x => x.VectorFlowImprovementDollars < 0m)
-                    + " vectorCore=" + rows.Count(x => x.VectorFlowHold.FinalMode == RangeVectorManagementMode.Core)
-                    + " vectorRunner=" + rows.Count(x => x.VectorFlowHold.FinalMode == RangeVectorManagementMode.Runner)
-                    + " controlHit300=" + rows.Count(x => x.RangeOnlyControl.RealizedDollars >= 300m)
-                    + " vectorHit300=" + rows.Count(x => x.VectorFlowHold.RealizedDollars >= 300m)
-                    + " controlHit500=" + rows.Count(x => x.RangeOnlyControl.RealizedDollars >= 500m)
-                    + " vectorHit500=" + rows.Count(x => x.VectorFlowHold.RealizedDollars >= 500m));
+                var allRows = new ProtectedRangeVectorAnalyzer().Analyze(bars);
+                var rows = allRows.Where(x => x.Source.SessionDateCentral >= ResearchStartCentral.Date
+                    && x.Source.SessionDateCentral < ResearchEndCentral.Date).ToList();
 
-                foreach (var hourGroup in rows.GroupBy(x => TimeZoneInfo.ConvertTime(x.EntryUtc, central).Hour).OrderBy(x => x.Key))
+                Console.WriteLine("ISE-RANGE-VECTOR-V2 WARMUP oneMinuteBarsBeforeResearch=" + warmupBars);
+                PrintOverall(rows);
+                PrintStage("Combine", rows.Where(x => x.CombineRiskQualified).ToList(), rows.Count(x => !x.CombineRiskQualified));
+                PrintStage("Funded", rows.Where(x => x.FundedRiskQualified).ToList(), rows.Count(x => !x.FundedRiskQualified));
+
+                foreach (var hourGroup in rows.GroupBy(x => TimeZoneInfo.ConvertTime(x.Source.EntryUtc, central).Hour).OrderBy(x => x.Key))
                 {
-                    Console.WriteLine("ISE-RANGE-VECTOR HOUR hourCentral=" + hourGroup.Key.ToString("00")
+                    Console.WriteLine("ISE-RANGE-VECTOR-V2 HOUR hourCentral=" + hourGroup.Key.ToString("00")
                         + " count=" + hourGroup.Count()
-                        + " aligned=" + hourGroup.Count(x => x.AlignedAtEntry || x.AlignedBeforeScalpExit)
-                        + " controlAvg=" + Avg(hourGroup.Select(x => x.RangeOnlyControl.RealizedDollars)).ToString("0.0")
-                        + " vectorAvg=" + Avg(hourGroup.Select(x => x.VectorFlowHold.RealizedDollars)).ToString("0.0")
-                        + " delta=" + Avg(hourGroup.Select(x => x.VectorFlowImprovementDollars)).ToString("0.0"));
+                        + " extended=" + hourGroup.Count(x => x.ProtectedHold.ExtensionActivated)
+                        + " controlAvg=" + Avg(hourGroup.Select(x => x.Source.RangeOnlyControl.RealizedDollars)).ToString("0.0")
+                        + " v1Avg=" + Avg(hourGroup.Select(x => x.Source.VectorFlowHold.RealizedDollars)).ToString("0.0")
+                        + " protectedAvg=" + Avg(hourGroup.Select(x => x.ProtectedHold.RealizedDollars)).ToString("0.0")
+                        + " deltaVsControl=" + Avg(hourGroup.Select(x => x.ImprovementVsControlDollars)).ToString("0.0"));
                 }
 
                 foreach (var row in rows)
                 {
-                    var local = TimeZoneInfo.ConvertTime(row.EntryUtc, central);
-                    Console.WriteLine("ISE-RANGE-VECTOR ROW date=" + row.SessionDateCentral.ToString("yyyy-MM-dd")
+                    var local = TimeZoneInfo.ConvertTime(row.Source.EntryUtc, central);
+                    Console.WriteLine("ISE-RANGE-VECTOR-V2 ROW date=" + row.Source.SessionDateCentral.ToString("yyyy-MM-dd")
                         + " entryAt=" + local.ToString("HH:mm")
-                        + " direction=" + row.Direction
-                        + " biasAtEntry=" + row.VectorBiasAtEntry
-                        + " alignedAtEntry=" + row.AlignedAtEntry
-                        + " alignedBeforeScalp=" + row.AlignedBeforeScalpExit
-                        + " riskTicks=" + row.InitialRiskTicks.ToString("0.0")
-                        + " controlMode=" + row.RangeOnlyControl.FinalMode
-                        + " controlExit=" + row.RangeOnlyControl.ExitReason
-                        + " controlDollars=" + row.RangeOnlyControl.RealizedDollars.ToString("0.0")
-                        + " controlMfeTicks=" + row.RangeOnlyControl.MaxFavorableTicks.ToString("0.0")
-                        + " vectorMode=" + row.VectorFlowHold.FinalMode
-                        + " vectorExit=" + row.VectorFlowHold.ExitReason
-                        + " vectorDollars=" + row.VectorFlowHold.RealizedDollars.ToString("0.0")
-                        + " vectorMfeTicks=" + row.VectorFlowHold.MaxFavorableTicks.ToString("0.0")
-                        + " delta=" + row.VectorFlowImprovementDollars.ToString("0.0"));
+                        + " direction=" + row.Source.Direction
+                        + " biasAtEntry=" + row.Source.VectorBiasAtEntry
+                        + " riskTicks=" + row.Source.InitialRiskTicks.ToString("0.0")
+                        + " combineRiskOK=" + row.CombineRiskQualified
+                        + " fundedRiskOK=" + row.FundedRiskQualified
+                        + " controlDollars=" + row.Source.RangeOnlyControl.RealizedDollars.ToString("0.0")
+                        + " v1Dollars=" + row.Source.VectorFlowHold.RealizedDollars.ToString("0.0")
+                        + " protectedMode=" + row.ProtectedHold.FinalMode
+                        + " protectedExit=" + row.ProtectedHold.ExitReason
+                        + " protectedDollars=" + row.ProtectedHold.RealizedDollars.ToString("0.0")
+                        + " protectedMfeTicks=" + row.ProtectedHold.MaxFavorableTicks.ToString("0.0")
+                        + " protectedFloorTicks=" + row.ProtectedHold.BestProtectedTicks.ToString("0.0")
+                        + " extended=" + row.ProtectedHold.ExtensionActivated
+                        + " deltaVsControl=" + row.ImprovementVsControlDollars.ToString("0.0")
+                        + " deltaVsV1=" + row.ImprovementVsV1Dollars.ToString("0.0"));
                 }
 
-                Console.WriteLine("ISE-RANGE-VECTOR NOTE entry authority is confirmed 3-minute Range Filter flip only; fill is next one-minute bar open; 5-minute VectorFlow FTC+VIDYA has hold authority only; control is fixed scalp management; no commissions/slippage/copy latency yet; parameters are research seeds, not production settings.");
-                Console.WriteLine("ISE-RANGE-VECTOR COMPLETE");
+                Console.WriteLine("ISE-RANGE-VECTOR-V2 NOTE entry authority remains confirmed 3-minute Range Filter only; extension is allowed only after the normal scalp objective is reached with completed 5-minute VectorFlow alignment; 100-tick breakeven, 75% peak-pullback protection, and 250-tick runner trail are research seeds from the supplied VectorFlow workflow; Combine/Funded risk flags are eligibility diagnostics only; no daily attempt sequencing, commissions, slippage, or copy latency in this pass.");
+                Console.WriteLine("ISE-RANGE-VECTOR-V2 COMPLETE");
                 return 0;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine("ISE-RANGE-VECTOR ERROR " + ex.GetType().Name + ": " + ex.Message);
+                Console.Error.WriteLine("ISE-RANGE-VECTOR-V2 ERROR " + ex.GetType().Name + ": " + ex.Message);
                 return 1;
             }
         }
 
-        private static decimal Avg(System.Collections.Generic.IEnumerable<decimal> values)
+        private static void PrintOverall(IReadOnlyList<ProtectedRangeVectorComparison> rows)
+        {
+            Console.WriteLine("ISE-RANGE-VECTOR-V2 RESULT entries=" + rows.Count
+                + " extended=" + rows.Count(x => x.ProtectedHold.ExtensionActivated)
+                + " breakeven=" + rows.Count(x => x.ProtectedHold.BreakevenActivated)
+                + " avgRiskTicks=" + Avg(rows.Select(x => x.Source.InitialRiskTicks)).ToString("0.0")
+                + " controlAvg=" + Avg(rows.Select(x => x.Source.RangeOnlyControl.RealizedDollars)).ToString("0.0")
+                + " v1Avg=" + Avg(rows.Select(x => x.Source.VectorFlowHold.RealizedDollars)).ToString("0.0")
+                + " protectedAvg=" + Avg(rows.Select(x => x.ProtectedHold.RealizedDollars)).ToString("0.0")
+                + " protectedGreen=" + rows.Count(x => x.ProtectedHold.RealizedDollars > 0m)
+                + " betterVsControl=" + rows.Count(x => x.ImprovementVsControlDollars > 0m)
+                + " worseVsControl=" + rows.Count(x => x.ImprovementVsControlDollars < 0m)
+                + " betterVsV1=" + rows.Count(x => x.ImprovementVsV1Dollars > 0m)
+                + " protectedCore=" + rows.Count(x => x.ProtectedHold.FinalMode == RangeVectorManagementMode.Core)
+                + " protectedRunner=" + rows.Count(x => x.ProtectedHold.FinalMode == RangeVectorManagementMode.Runner)
+                + " protectedHit300=" + rows.Count(x => x.ProtectedHold.RealizedDollars >= 300m)
+                + " protectedHit500=" + rows.Count(x => x.ProtectedHold.RealizedDollars >= 500m));
+        }
+
+        private static void PrintStage(string name, IReadOnlyList<ProtectedRangeVectorComparison> eligible, int rejectedRisk)
+        {
+            Console.WriteLine("ISE-RANGE-VECTOR-V2 STAGE stage=" + name
+                + " eligible=" + eligible.Count
+                + " rejectedRisk=" + rejectedRisk
+                + " avgRiskTicks=" + Avg(eligible.Select(x => x.Source.InitialRiskTicks)).ToString("0.0")
+                + " controlAvg=" + Avg(eligible.Select(x => x.Source.RangeOnlyControl.RealizedDollars)).ToString("0.0")
+                + " protectedAvg=" + Avg(eligible.Select(x => x.ProtectedHold.RealizedDollars)).ToString("0.0")
+                + " green=" + eligible.Count(x => x.ProtectedHold.RealizedDollars > 0m)
+                + " extended=" + eligible.Count(x => x.ProtectedHold.ExtensionActivated)
+                + " hit300=" + eligible.Count(x => x.ProtectedHold.RealizedDollars >= 300m)
+                + " hit500=" + eligible.Count(x => x.ProtectedHold.RealizedDollars >= 500m));
+        }
+
+        private static decimal Avg(IEnumerable<decimal> values)
         {
             var list = values.ToList();
             return list.Count == 0 ? 0m : list.Average();
