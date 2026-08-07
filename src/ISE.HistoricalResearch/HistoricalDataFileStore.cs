@@ -52,6 +52,16 @@ namespace ISE.HistoricalResearch
 
         public IReadOnlyList<HistoricalBar> Read(string path)
         {
+            return new HistoricalDataNormalizer().Normalize(Parse(path));
+        }
+
+        public IReadOnlyList<HistoricalBar> ReadContractAware(string path)
+        {
+            return new ContractAwareHistoricalDatasetValidator().ValidateAndOrder(Parse(path));
+        }
+
+        private static IReadOnlyList<HistoricalBar> Parse(string path)
+        {
             if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Path is required.", nameof(path));
             if (!File.Exists(path)) throw new FileNotFoundException("Historical data file was not found.", path);
 
@@ -60,9 +70,7 @@ namespace ISE.HistoricalResearch
             {
                 var header = reader.ReadLine();
                 if (!string.Equals(header, Header, StringComparison.Ordinal))
-                {
                     throw new InvalidDataException("Historical data schema header is invalid or unsupported.");
-                }
 
                 string? line;
                 while ((line = reader.ReadLine()) != null)
@@ -89,7 +97,7 @@ namespace ISE.HistoricalResearch
                 }
             }
 
-            return new HistoricalDataNormalizer().Normalize(bars);
+            return bars;
         }
 
         private static decimal? ParseNullableDecimal(string value)
@@ -100,9 +108,7 @@ namespace ISE.HistoricalResearch
         private static void ValidateText(string value, string name)
         {
             if (value.IndexOf('\t') >= 0 || value.IndexOf('\r') >= 0 || value.IndexOf('\n') >= 0)
-            {
                 throw new InvalidDataException(name + " cannot contain tabs or line breaks.");
-            }
         }
     }
 }
