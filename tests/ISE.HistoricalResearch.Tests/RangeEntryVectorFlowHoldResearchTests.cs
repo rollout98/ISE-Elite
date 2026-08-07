@@ -69,10 +69,10 @@ namespace ISE.HistoricalResearch.Tests
         {
             var prices = new List<decimal>();
             decimal p = 100m;
-            for (var i = 0; i < 600; i++)
+            for (var i = 0; i < 900; i++)
             {
-                if (i < 420) p -= 0.05m;
-                else if (i < 470) p -= 0.20m;
+                if (i < 620) p -= 0.05m;
+                else if (i < 660) p -= 0.20m;
                 else p += 0.30m;
                 prices.Add(p);
             }
@@ -83,7 +83,7 @@ namespace ISE.HistoricalResearch.Tests
         {
             var prices = new List<decimal>();
             decimal p = 100m;
-            for (var i = 0; i < 600; i++)
+            for (var i = 0; i < 900; i++)
             {
                 p += 0.08m;
                 prices.Add(p);
