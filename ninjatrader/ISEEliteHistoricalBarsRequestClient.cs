@@ -1,16 +1,101 @@
 // NinjaTrader 8 runtime bridge for ISE Elite Historical Research.
 // This source is intentionally kept outside the cross-platform solution build because it references NinjaTrader assemblies directly.
-// Compile/deploy only inside the NinjaTrader 8 custom environment after the corresponding ISE host assemblies are available.
+// It is self-contained for NinjaTrader's bin\Custom compilation and does not require ISE.NinjaTraderHost.dll.
 
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using ISE.NinjaTraderHost.HistoricalData;
 using NinjaTrader.Cbi;
 using NinjaTrader.Data;
 
+namespace ISE.NinjaTraderHost.HistoricalData
+{
+    // Runtime copies of the small host-side contract used by the BarsRequest bridge.
+    // Keep these definitions wire-compatible with src/ISE.NinjaTraderHost/HistoricalData/NinjaTraderHistoricalDataSource.cs.
+    public enum NinjaTraderHistoricalLookupPolicy
+    {
+        Provider = 1,
+        Repository = 2
+    }
+
+    public sealed class NinjaTraderHistoricalBarsRequest
+    {
+        public NinjaTraderHistoricalBarsRequest(
+            string instrumentFullName,
+            DateTime fromLocal,
+            DateTime toLocal,
+            int intervalSeconds,
+            NinjaTraderHistoricalLookupPolicy lookupPolicy,
+            string tradingHoursTemplate)
+        {
+            if (string.IsNullOrWhiteSpace(instrumentFullName)) throw new ArgumentException("Instrument full name is required.", nameof(instrumentFullName));
+            if (toLocal <= fromLocal) throw new ArgumentException("End must be after start.", nameof(toLocal));
+            if (intervalSeconds <= 0) throw new ArgumentOutOfRangeException(nameof(intervalSeconds));
+            if (string.IsNullOrWhiteSpace(tradingHoursTemplate)) throw new ArgumentException("Trading-hours template is required.", nameof(tradingHoursTemplate));
+
+            InstrumentFullName = instrumentFullName.Trim();
+            FromLocal = DateTime.SpecifyKind(fromLocal, DateTimeKind.Unspecified);
+            ToLocal = DateTime.SpecifyKind(toLocal, DateTimeKind.Unspecified);
+            IntervalSeconds = intervalSeconds;
+            LookupPolicy = lookupPolicy;
+            TradingHoursTemplate = tradingHoursTemplate.Trim();
+        }
+
+        public string InstrumentFullName { get; }
+        public DateTime FromLocal { get; }
+        public DateTime ToLocal { get; }
+        public int IntervalSeconds { get; }
+        public NinjaTraderHistoricalLookupPolicy LookupPolicy { get; }
+        public string TradingHoursTemplate { get; }
+    }
+
+    public sealed class NinjaTraderHistoricalBarRecord
+    {
+        public NinjaTraderHistoricalBarRecord(
+            DateTime timestampLocal,
+            DateTime tradingDay,
+            decimal open,
+            decimal high,
+            decimal low,
+            decimal close,
+            long volume,
+            decimal? bid,
+            decimal? ask)
+        {
+            if (tradingDay.TimeOfDay != TimeSpan.Zero) throw new ArgumentException("Trading day must be date-only.", nameof(tradingDay));
+
+            TimestampLocal = DateTime.SpecifyKind(timestampLocal, DateTimeKind.Unspecified);
+            TradingDay = tradingDay.Date;
+            Open = open;
+            High = high;
+            Low = low;
+            Close = close;
+            Volume = volume;
+            Bid = bid;
+            Ask = ask;
+        }
+
+        public DateTime TimestampLocal { get; }
+        public DateTime TradingDay { get; }
+        public decimal Open { get; }
+        public decimal High { get; }
+        public decimal Low { get; }
+        public decimal Close { get; }
+        public long Volume { get; }
+        public decimal? Bid { get; }
+        public decimal? Ask { get; }
+    }
+
+    public interface INinjaTraderHistoricalBarsClient
+    {
+        IReadOnlyList<NinjaTraderHistoricalBarRecord> Request(NinjaTraderHistoricalBarsRequest request);
+    }
+}
+
 namespace ISE.NinjaTraderRuntime.HistoricalData
 {
+    using ISE.NinjaTraderHost.HistoricalData;
+
     public sealed class ISEEliteHistoricalBarsRequestClient : INinjaTraderHistoricalBarsClient
     {
         private readonly TimeSpan _requestTimeout;
