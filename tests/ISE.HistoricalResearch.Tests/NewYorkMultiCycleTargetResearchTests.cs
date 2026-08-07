@@ -27,7 +27,9 @@ namespace ISE.HistoricalResearch.Tests
             var bars = new List<HistoricalBar>();
             bars.AddRange(BuildWindow(date, new TimeSpan(8, 30, 0), 15, i => 100m + i * 3m));
             bars.AddRange(BuildWindow(date, new TimeSpan(8, 45, 0), 45, i => 142m - i * 2m));
-            bars.AddRange(BuildWindow(date, new TimeSpan(9, 30, 0), 60, i => 54m + i * 1m));
+            // Ensure the three-cycle synthetic fixture contains enough aggregate movement
+            // to exercise both the $500 and $1,000 cumulative-objective paths.
+            bars.AddRange(BuildWindow(date, new TimeSpan(9, 30, 0), 60, i => 54m + i * 3m));
 
             var result = new NewYorkMultiCycleTargetAnalyzer().Analyze(bars);
             var session = Assert.Single(result);
