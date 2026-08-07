@@ -23,11 +23,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 IsOverlay = true;
                 DisplayInDataBox = false;
                 PaintPriceMarkers = false;
-                IsSuspendedWhileInactive = true;
+                IsSuspendedWhileInactive = false;
             }
-            else if (State == State.Realtime && !started)
+            else if (State == State.DataLoaded && !started)
             {
                 started = true;
+                Print("ISE-HIST-PROBE LOADED");
                 StartProbe();
             }
         }
