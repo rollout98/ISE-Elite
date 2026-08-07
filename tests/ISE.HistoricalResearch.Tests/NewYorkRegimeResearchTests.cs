@@ -66,7 +66,7 @@ namespace ISE.HistoricalResearch.Tests
         [Fact]
         public void Classifier_IdentifiesLaterContinuationOrReversal()
         {
-            var f = Features(pre: 20m, openingRange: 10m, openingDisplacement: 4m, openingEfficiency: 0.40m, earlyDisplacement: 1m, adverse: 2m, laterDisplacement: -6m, coreRange: 20m, coreDisplacement: -1m, coreEfficiency: 0.05m);
+            var f = Features(pre: 20m, openingRange: 10m, openingDisplacement: 4m, openingEfficiency: 0.40m, earlyDisplacement: 1m, adverse: 2m, laterDisplacement: -6m, coreRange: 30m, coreDisplacement: -1m, coreEfficiency: 0.05m);
             var result = new NewYorkRegimeSeedClassifier().Classify(f);
             Assert.Equal(NewYorkResearchRegime.LaterContinuationReversal, result.Regime);
         }
