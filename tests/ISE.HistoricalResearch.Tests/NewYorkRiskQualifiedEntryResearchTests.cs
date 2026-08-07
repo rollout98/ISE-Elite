@@ -33,7 +33,7 @@ namespace ISE.HistoricalResearch.Tests
             var bars = BuildBars(date, new[]
             {
                 (8,50,100m,101m,99m,100m),
-                (8,51,100m,95.5m,95m,95.5m),
+                (8,51,100m,100m,95m,95.5m),
                 (8,52,95.5m,97m,94m,96m),
                 (8,53,96m,96.5m,93m,93.5m),
                 (8,54,93.5m,94m,90m,91m),
