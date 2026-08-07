@@ -18,6 +18,8 @@ Connect the Historical Research model to NinjaTrader 8 historical bars without c
 
 The host adapter is part of the normal solution and is unit tested. The concrete BarsRequest client is stored under `ninjatrader/` because it must compile inside the NinjaTrader 8 environment against NinjaTrader assemblies.
 
+The NinjaTrader-side bridge is intentionally self-contained for `bin\Custom` compilation. It carries runtime copies of the small request/record/interface contract used by the bridge, so NinjaTrader does **not** need a reference to `ISE.NinjaTraderHost.dll` just to compile the BarsRequest source. Those runtime contract definitions must remain wire-compatible with the corresponding host-side definitions in `src/ISE.NinjaTraderHost/HistoricalData/NinjaTraderHistoricalDataSource.cs`.
+
 ## Initial scope
 
 - instrument: MNQ
@@ -67,6 +69,8 @@ The concrete `ninjatrader/ISEEliteHistoricalBarsRequestClient.cs` file is **not*
 - a small known historical date range
 - Output 1 visible
 - no order placement and no live-account behavior
+
+The first runtime compile must succeed from `bin\Custom` without adding `ISE.NinjaTraderHost.dll` as a NinjaTrader reference. This verifies that the runtime bridge remains self-contained.
 
 Compare returned bar count, timestamps, OHLCV, trading-day assignment, and data-source metadata against a NinjaTrader chart or Historical Data view for the same contract and trading-hours template.
 
