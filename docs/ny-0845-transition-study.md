@@ -1,65 +1,64 @@
-# ISE Elite 08:45 Continue / Reverse / Stand-Aside Study
+# New York 08:45 Transition and Causal Entry Study
 
 ## Purpose
 
-This Historical Research / Lab study tests the next causal step after the multi-cycle opportunity-envelope analysis. It asks whether ISE can use only information available on completed one-minute bars to decide whether the 08:30 opening move is continuing, reversing, or not sufficiently resolved to trade.
+This research separates **market-state detection** from **trade entry**. The 08:45 transition layer classifies the opening state as `Continue`, `Reverse`, or `StandAside` using completed one-minute bars only. The causal-entry layer then decides whether a usable entry has actually formed.
 
-The study does not place orders and is not a production strategy.
+This is Historical Research / Lab code only. It does not place orders and is not a production entry rule.
 
-## Decision model
+## Transition layer
 
-- 08:30-08:45 CT: opening observation period.
-- 08:45-09:05 CT: causal transition-detection period.
-- 09:30 CT: end of the first outcome-measurement period.
+The opening observation window is 08:30-08:45 Central. From 08:45-09:05 the transition detector evaluates completed bars and retains the first qualifying state:
 
-The detector first measures opening direction, opening range, opening displacement, and opening efficiency. If the opening is not directional enough, the session remains `StandAside`.
+- `Continue`: opening direction remains structurally active;
+- `Reverse`: opening structure materially retraces and crosses the midpoint buffer;
+- `StandAside`: neither state is sufficiently resolved.
 
-During 08:45-09:05, each completed one-minute bar is evaluated chronologically. The first qualifying state is retained:
+The first causal study showed that using the next bar after the state signal as an entry was too aggressive, especially for `Continue`. Therefore the state signal is no longer treated as an entry signal.
 
-- `Continue`: the opening direction extends beyond the opening extreme by the configured fraction of opening range.
-- `Reverse`: price retraces a configured fraction of opening displacement and crosses beyond the opening-range midpoint buffer in the opposite direction.
-- `StandAside`: neither condition is confirmed by 09:05.
+## Causal entry layer
 
-A qualifying signal never uses future bars. The research entry reference is the **next one-minute bar open after the signal bar**. Favorable/adverse excursion and $500/$1,000 target availability are then measured from that reference entry through 09:30 CT.
+`NewYorkCausalEntryAnalyzer` searches only after the transition signal and uses completed bars through 09:20 Central. Any standardized research entry occurs at the **next one-minute bar open after setup completion**.
 
-## Default seed thresholds
+### Continue
 
-The first transparent defaults are intentionally research seeds, not tuned production parameters:
+A continuation state must first experience a measurable reset/pullback of at least `0.20x` the 08:30-08:45 opening range from the post-signal favorable extreme. After that reset has occurred, continuation setup completion requires a one-minute close through the prior bar's high for Long or through the prior bar's low for Short.
 
-- minimum opening efficiency: 0.35
-- continuation extension: 0.15x opening range
-- reversal retracement: 0.50x opening displacement
-- reversal midpoint buffer: 0.05x opening range
-- MNQ tick size: 0.25
-- MNQ point value: $2.00 per contract
-- contracts: 2
-- lower objective: $500
-- upper objective: $1,000
+This deliberately prevents `Continue` from meaning "chase the next bar."
 
-Do not tune these thresholds on the 42-session development sample merely to improve the reported results.
+### Reverse
+
+A reversal state requires completed-bar confirmation in the reversal direction. The initial research seed requires one bar to close through the prior bar's high for Long or low for Short. The standardized entry reference is the next one-minute bar open.
+
+### StandAside
+
+`StandAside` creates no entry in this study. It means "not yet," not "no trade for the day." A later fresh-cycle detector will handle unresolved mornings and the 09:30 transition.
+
+## Outcome measurement
+
+After a causal reference entry, the study measures through 09:30 Central:
+
+- favorable and adverse excursion in points/ticks;
+- whether $500 becomes available with two MNQ contracts;
+- whether $1,000 becomes available with two MNQ contracts;
+- first target-hit timestamps.
+
+The default research economics remain MNQ tick size `0.25`, point value `$2.00` per contract, and two contracts. Costs and stop execution are not yet included.
+
+## Guardrails
+
+- no future bars are used to decide the transition state or setup completion;
+- setup completion and entry are separated by one bar: entry is always the next bar open;
+- thresholds are transparent seed values and must not be tuned solely to improve this 42-session sample;
+- target availability is not executable P&L;
+- no production stops, sizing changes, or account governance are defined here.
 
 ## Run
 
 ```powershell
-dotnet run --project .\tools\ISE.HistoricalResearch.EightFortyFiveTransitionStudy -- "C:\Users\dlewi\OneDrive\Documents\NinjaTrader 8\ISEEliteResearch\ny-MNQ-contract-aware-20260601-20260731-0600-1100-60s-repository.tsv"
+dotnet run --project .\tools\ISE.HistoricalResearch.CausalEntryStudy -- "C:\Users\dlewi\OneDrive\Documents\NinjaTrader 8\ISEEliteResearch\ny-MNQ-contract-aware-20260601-20260731-0600-1100-60s-repository.tsv"
 ```
 
-The CLI prints overall Continue / Reverse / StandAside counts, target availability, average favorable/adverse ticks by state, and one row per session with signal time, next-bar reference entry, and first $500/$1,000 hit times.
+## Validation question
 
-## Interpretation guardrails
-
-- This is causal state labeling but still not executable P&L.
-- The reference entry is standardized research behavior, not a final production entry rule.
-- No stop, commission, slippage, account governance, or daily lockout is modeled here.
-- The 08:45 clock time is a reevaluation point, not a mandatory reversal.
-- Same-direction continuation after a pause can still become a fresh trade cycle later; direction alone does not define trade identity.
-- The 40/80 protected-fill harness remains execution/safety validation only.
-
-## Validation gate
-
-1. Historical Research tests must pass at the latest branch head.
-2. Full Windows solution build must remain 0 warnings / 0 errors.
-3. Run this study over all 42 validated NY sessions.
-4. Compare Continue, Reverse, and StandAside frequencies and target availability.
-5. Inspect signal-time clustering within 08:45-09:05.
-6. Only after reviewing these outputs should realistic pullback completion, entry qualification, stop placement, and cumulative two-trade daily-goal logic be proposed.
+Compare the causal-entry output with the earlier immediate-next-bar transition study. The next gate is evidence that waiting for reset completion materially improves adverse excursion and target availability without eliminating too many valid opportunities. If it does, the following research step is a causal 09:30 fresh-cycle detector plus realistic stop/cost and cumulative daily-objective simulation.
