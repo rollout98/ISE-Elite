@@ -50,7 +50,10 @@ namespace ISE.HistoricalResearch.Tests
             var outcome = Assert.Single(new NewYorkStructuralEntryAnalyzer().Analyze(bars, new[] { transition }));
             Assert.False(outcome.HasEntry);
             Assert.Equal(NewYorkStructuralEntryDisposition.ContinuationInvalidated, outcome.Disposition);
-            Assert.Equal(bars[17].TimestampUtc, outcome.InvalidatedUtc);
+            // Opening midpoint = 121.5 and 0.05 x 48 buffer = 2.4, so long continuation
+            // invalidates only after a completed close below 119.1. The 08:47 close is 120;
+            // the first qualifying invalidation close is the 08:48 bar at 119.
+            Assert.Equal(bars[18].TimestampUtc, outcome.InvalidatedUtc);
         }
 
         [Fact]
