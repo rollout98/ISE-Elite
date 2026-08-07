@@ -73,7 +73,11 @@ namespace ISE.HistoricalResearch
 
         private NewYorkObjectivePathOutcome AnalyzeEntry(IReadOnlyList<LocalBar> session, NewYorkRiskQualifiedEntryOutcome entry)
         {
-            var path = session.Where(x => x.Bar.TimestampUtc >= entry.EntryUtc!.Value && x.Local.TimeOfDay < OutcomeEnd)
+            if (!entry.EntryUtc.HasValue)
+                throw new InvalidOperationException("Accepted objective-path entry must have an entry timestamp.");
+
+            var entryUtc = entry.EntryUtc.Value;
+            var path = session.Where(x => x.Bar.TimestampUtc >= entryUtc && x.Local.TimeOfDay < OutcomeEnd)
                 .OrderBy(x => x.Local).ToList();
             var points300 = config.IntermediateObjective / (config.PointValuePerContract * config.Contracts);
             var points500 = config.LowerObjective / (config.PointValuePerContract * config.Contracts);
@@ -102,7 +106,7 @@ namespace ISE.HistoricalResearch
                 if (!hit1000.HasValue && favorable >= points1000) hit1000 = bar.Bar.TimestampUtc;
             }
 
-            return new NewYorkObjectivePathOutcome(entry.SessionDateCentral, entry.EntryType, entry.EntryUtc.Value,
+            return new NewYorkObjectivePathOutcome(entry.SessionDateCentral, entry.EntryType, entryUtc,
                 hit300, hit500, hit1000, stop, path.Count == 0 ? (DateTimeOffset?)null : path[path.Count - 1].Bar.TimestampUtc);
         }
 
