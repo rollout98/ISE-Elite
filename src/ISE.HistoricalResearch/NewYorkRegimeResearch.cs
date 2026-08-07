@@ -286,7 +286,7 @@ namespace ISE.HistoricalResearch
     {
         private readonly NewYorkRegimeResearchConfig config;
 
-        public NewYorkRegimeSeedClassifier(NewYorkRegimeResearchConfig config = null)
+        public NewYorkRegimeSeedClassifier(NewYorkRegimeResearchConfig? config = null)
         {
             this.config = config ?? new NewYorkRegimeResearchConfig();
         }
