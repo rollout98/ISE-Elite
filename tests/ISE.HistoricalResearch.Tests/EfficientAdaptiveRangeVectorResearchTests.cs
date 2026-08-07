@@ -15,7 +15,9 @@ namespace ISE.HistoricalResearch.Tests
             var indicator = TestIndicatorConfig();
             var raw = new RangeEntryVectorFlowHoldAnalyzer(indicator).Analyze(bars);
             var v3 = new EfficientAdaptiveRangeVectorAnalyzer(new EfficientAdaptiveRangeVectorConfig(
-                MorningResearchAccountStage.Combine, indicator)).Analyze(bars);
+                MorningResearchAccountStage.Combine, indicator,
+                nonAlignedBreakevenTriggerTicks: 10,
+                extensionProfitFloorTicks: 10)).Analyze(bars);
 
             Assert.Equal(raw.Count, v3.Count);
             Assert.Equal(raw.Select(x => x.SignalUtc), v3.Select(x => x.Source.SignalUtc));
@@ -28,9 +30,13 @@ namespace ISE.HistoricalResearch.Tests
             var bars = BuildReversalSession(new DateTime(2026, 7, 28));
             var indicator = TestIndicatorConfig();
             var combine = new EfficientAdaptiveRangeVectorAnalyzer(new EfficientAdaptiveRangeVectorConfig(
-                MorningResearchAccountStage.Combine, indicator, maximumStructuralRiskTicks: 40m)).Analyze(bars);
+                MorningResearchAccountStage.Combine, indicator, maximumStructuralRiskTicks: 40m,
+                nonAlignedBreakevenTriggerTicks: 10,
+                extensionProfitFloorTicks: 10)).Analyze(bars);
             var funded = new EfficientAdaptiveRangeVectorAnalyzer(new EfficientAdaptiveRangeVectorConfig(
-                MorningResearchAccountStage.Funded, indicator, maximumStructuralRiskTicks: 30m)).Analyze(bars);
+                MorningResearchAccountStage.Funded, indicator, maximumStructuralRiskTicks: 30m,
+                nonAlignedBreakevenTriggerTicks: 10,
+                extensionProfitFloorTicks: 10)).Analyze(bars);
 
             Assert.NotEmpty(combine);
             Assert.NotEmpty(funded);
@@ -48,7 +54,9 @@ namespace ISE.HistoricalResearch.Tests
             const decimal cap = 40m;
             var rows = new EfficientAdaptiveRangeVectorAnalyzer(new EfficientAdaptiveRangeVectorConfig(
                 MorningResearchAccountStage.Combine, indicator, maximumStructuralRiskTicks: cap,
-                maximumDeferralMinutes: 30)).Analyze(bars);
+                maximumDeferralMinutes: 30,
+                nonAlignedBreakevenTriggerTicks: 10,
+                extensionProfitFloorTicks: 10)).Analyze(bars);
 
             Assert.All(rows.Where(x => x.Deferred), x =>
             {
