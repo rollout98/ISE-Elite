@@ -27,8 +27,8 @@ namespace ISE.HistoricalResearch.Tests
             var outcome = Assert.Single(new NewYorkCausalEntryAnalyzer(new NewYorkCausalEntryConfig(0.20m)).Analyze(bars, new[] { transition }));
             Assert.True(outcome.HasEntry);
             Assert.Equal(NewYorkCausalEntryType.ContinuationAfterReset, outcome.EntryType);
-            Assert.Equal(bars[3].TimestampUtc, outcome.SetupCompleteUtc);
-            Assert.Equal(bars[4].TimestampUtc, outcome.EntryUtc);
+            Assert.Equal(bars[4].TimestampUtc, outcome.SetupCompleteUtc);
+            Assert.Equal(bars[5].TimestampUtc, outcome.EntryUtc);
         }
 
         [Fact]
