@@ -29,6 +29,7 @@ namespace ISE.HistoricalResearch.RangeVectorFlowStudy
                 Console.WriteLine("ISE-RANGE-VECTOR-V2 WARMUP oneMinuteBarsBeforeResearch=" + warmupBars);
                 RunV2(bars, central);
                 RunV3(bars, central);
+                RunV4(bars, central);
                 return 0;
             }
             catch (Exception ex)
@@ -87,10 +88,39 @@ namespace ISE.HistoricalResearch.RangeVectorFlowStudy
             Console.WriteLine("ISE-RANGE-VECTOR-V3 COMPLETE");
         }
 
+        private static void RunV4(IReadOnlyList<HistoricalBar> bars, TimeZoneInfo central)
+        {
+            var combineConfig = RangeVectorDailySelectionConfig.CombineDefault;
+            var fundedConfig = RangeVectorDailySelectionConfig.FundedDefault;
+            var combine = new RangeVectorDailySequencingAnalyzer(combineConfig).Analyze(bars)
+                .Where(IsResearchDay).ToList();
+            var funded = new RangeVectorDailySequencingAnalyzer(fundedConfig).Analyze(bars)
+                .Where(IsResearchDay).ToList();
+
+            Console.WriteLine("ISE-RANGE-VECTOR-V4 START maxAttempts=" + combineConfig.MaximumAttempts
+                + " combineActionable=" + combineConfig.ActionableScore.ToString("0")
+                + " fundedActionable=" + fundedConfig.ActionableScore.ToString("0")
+                + " combineRiskCapTicks=" + combineConfig.MaximumStructuralRiskTicks.ToString("0.0")
+                + " fundedRiskCapTicks=" + fundedConfig.MaximumStructuralRiskTicks.ToString("0.0")
+                + " lowerObjective=" + combineConfig.LowerObjectiveDollars.ToString("0")
+                + " upperObjective=" + combineConfig.UpperObjectiveDollars.ToString("0"));
+
+            PrintV4Stage(combineConfig, combine, central);
+            PrintV4Stage(fundedConfig, funded, central);
+            Console.WriteLine("ISE-RANGE-VECTOR-V4 NOTE Range Filter remains the only directional opportunity authority. Efficient Entry v3 supplies the risk-qualified fill. V4 entry selection uses completed one-minute ISE market state, mapped setup family, context efficiency, actual entry risk, opportunity age, and clock context only; five-minute VectorFlow bias and all future P&L/MFE fields are excluded from the entry score. VectorFlow retains hold authority after selection. Maximum two attempts per day, lower-objective and green-floor governance are applied chronologically. Missed 300/500/runner fields are hindsight diagnostics only. No commissions, slippage, or copy latency yet; thresholds remain development seeds rather than production tuning.");
+            Console.WriteLine("ISE-RANGE-VECTOR-V4 COMPLETE");
+        }
+
         private static bool IsResearchRow(EfficientAdaptiveRangeVectorOutcome row)
         {
             return row.Source.SessionDateCentral >= ResearchStartCentral.Date
                 && row.Source.SessionDateCentral < ResearchEndCentral.Date;
+        }
+
+        private static bool IsResearchDay(RangeVectorDailyOutcome day)
+        {
+            return day.SessionDateCentral >= ResearchStartCentral.Date
+                && day.SessionDateCentral < ResearchEndCentral.Date;
         }
 
         private static void PrintV3Stage(EfficientAdaptiveRangeVectorConfig config,
@@ -154,6 +184,79 @@ namespace ISE.HistoricalResearch.RangeVectorFlowStudy
             }
         }
 
+        private static void PrintV4Stage(RangeVectorDailySelectionConfig config,
+            IReadOnlyList<RangeVectorDailyOutcome> days, TimeZoneInfo central)
+        {
+            var decisions = days.SelectMany(x => x.Decisions).ToList();
+            var selected = days.SelectMany(x => x.SelectedTrades).ToList();
+            var daily = days.Select(x => x.RealizedDollars).ToList();
+            var selectedManaged = selected.Select(x => x.Source.ManagedOutcome!).ToList();
+
+            Console.WriteLine("ISE-RANGE-VECTOR-V4 STAGE stage=" + config.Stage
+                + " sessions=" + days.Count
+                + " candidates=" + decisions.Count
+                + " selected=" + selected.Count
+                + " avgTradesPerDay=" + (days.Count == 0 ? 0m : (decimal)selected.Count / days.Count).ToString("0.00")
+                + " immediate=" + selected.Count(x => x.Source.Disposition == EfficientAdaptiveEntryDisposition.Immediate)
+                + " deferred=" + selected.Count(x => x.Source.Disposition == EfficientAdaptiveEntryDisposition.Deferred)
+                + " actionableSelected=" + selected.Count(x => x.Decision.Readiness == MorningOpportunityReadiness.Actionable)
+                + " exceptionalSelected=" + selected.Count(x => x.Decision.Readiness == MorningOpportunityReadiness.Exceptional)
+                + " avgEntryRiskTicks=" + Avg(selected.Select(x => x.Source.InitialRiskTicks ?? 0m)).ToString("0.0")
+                + " avgTradeDollars=" + Avg(selectedManaged.Select(x => x.RealizedDollars)).ToString("0.0")
+                + " greenDays=" + days.Count(x => x.Green)
+                + " hit300Days=" + days.Count(x => x.ReachedThreeHundred)
+                + " hit500Days=" + days.Count(x => x.ReachedLowerObjective)
+                + " hit1000Days=" + days.Count(x => x.ReachedUpperObjective)
+                + " avgDaily=" + Avg(daily).ToString("0.0")
+                + " medianDaily=" + Median(daily).ToString("0.0")
+                + " worstDay=" + (daily.Count == 0 ? 0m : daily.Min()).ToString("0.0")
+                + " bestDay=" + (daily.Count == 0 ? 0m : daily.Max()).ToString("0.0")
+                + " runners=" + selectedManaged.Count(x => x.FinalMode == RangeVectorManagementMode.Runner)
+                + " extended=" + selectedManaged.Count(x => x.ExtensionActivated)
+                + " missed300=" + days.Sum(x => x.MissedThreeHundredOpportunities)
+                + " missed500=" + days.Sum(x => x.MissedFiveHundredOpportunities)
+                + " missedRunner=" + days.Sum(x => x.MissedRunnerCapableOpportunities));
+
+            Console.WriteLine("ISE-RANGE-VECTOR-V4 DIST stage=" + config.Stage
+                + " lossDays=" + days.Count(x => x.RealizedDollars < 0m)
+                + " flatDays=" + days.Count(x => x.RealizedDollars == 0m)
+                + " greenUnder300=" + days.Count(x => x.RealizedDollars > 0m && x.RealizedDollars < 300m)
+                + " days300to499=" + days.Count(x => x.RealizedDollars >= 300m && x.RealizedDollars < 500m)
+                + " days500to999=" + days.Count(x => x.RealizedDollars >= 500m && x.RealizedDollars < 1000m)
+                + " days1000plus=" + days.Count(x => x.RealizedDollars >= 1000m));
+
+            Console.WriteLine("ISE-RANGE-VECTOR-V4 REJECT stage=" + config.Stage
+                + " observe=" + decisions.Count(x => !x.Selected && x.Reason == "Observe")
+                + " deferredReadiness=" + decisions.Count(x => !x.Selected && x.Reason == "DeferredReadiness")
+                + " positionOpen=" + decisions.Count(x => !x.Selected && x.Reason == "PositionOpen")
+                + " governance=" + decisions.Count(x => !x.Selected && x.Reason == "Governance")
+                + " greenProtection=" + decisions.Count(x => !x.Selected && x.Reason == "GreenProtection")
+                + " insufficientContext=" + decisions.Count(x => !x.Selected && x.Reason == "InsufficientContext"));
+
+            foreach (var day in days.Where(x => x.Attempts > 0))
+            {
+                foreach (var trade in day.SelectedTrades)
+                {
+                    var source = trade.Source;
+                    var local = TimeZoneInfo.ConvertTime(source.EntryUtc!.Value, central);
+                    Console.WriteLine("ISE-RANGE-VECTOR-V4 ROW stage=" + config.Stage
+                        + " date=" + day.SessionDateCentral.ToString("yyyy-MM-dd")
+                        + " entryAt=" + local.ToString("HH:mm")
+                        + " direction=" + source.Source.Direction
+                        + " readiness=" + trade.Decision.Readiness
+                        + " score=" + trade.Decision.Score.ToString("0.0")
+                        + " state=" + trade.Decision.Context!.State
+                        + " setup=" + trade.Decision.Context.SetupType
+                        + " disposition=" + source.Disposition
+                        + " deferralMinutes=" + source.DeferralMinutes
+                        + " entryRiskTicks=" + source.InitialRiskTicks!.Value.ToString("0.0")
+                        + " mode=" + source.ManagedOutcome!.FinalMode
+                        + " dollars=" + source.ManagedOutcome.RealizedDollars.ToString("0.0")
+                        + " cumulative=" + trade.CumulativeAfterTrade.ToString("0.0"));
+                }
+            }
+        }
+
         private static void PrintV2Overall(IReadOnlyList<ProtectedRangeVectorComparison> rows)
         {
             Console.WriteLine("ISE-RANGE-VECTOR-V2 RESULT entries=" + rows.Count
@@ -191,6 +294,14 @@ namespace ISE.HistoricalResearch.RangeVectorFlowStudy
         {
             var list = values.ToList();
             return list.Count == 0 ? 0m : list.Average();
+        }
+
+        private static decimal Median(IEnumerable<decimal> values)
+        {
+            var list = values.OrderBy(x => x).ToList();
+            if (list.Count == 0) return 0m;
+            var middle = list.Count / 2;
+            return list.Count % 2 == 1 ? list[middle] : (list[middle - 1] + list[middle]) / 2m;
         }
 
         private static TimeZoneInfo ResolveCentralTimeZone()
