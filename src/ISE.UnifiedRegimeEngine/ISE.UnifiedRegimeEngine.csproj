@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputType>Library</OutputType>
+    <AssemblyName>ISE.UnifiedRegimeEngine</AssemblyName>
+    <RootNamespace>ISE.UnifiedRegimeEngine</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ISE.Core/ISE.Core.csproj" />
+    <ProjectReference Include="../ISE.OrderFlowIntelligence/ISE.OrderFlowIntelligence.csproj" />
+  </ItemGroup>
+
+</Project>
