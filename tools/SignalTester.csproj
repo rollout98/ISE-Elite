@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="../src/ISE.BacktestHarness/ISE.BacktestHarness.csproj" />
     <ProjectReference Include="../src/ISE.HistoricalResearch/ISE.HistoricalResearch.csproj" />
+    <ProjectReference Include="../src/ISE.OrderFlowAnalysis/ISE.OrderFlowAnalysis.csproj" />
   </ItemGroup>
 
 </Project>

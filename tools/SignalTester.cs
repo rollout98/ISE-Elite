@@ -4,6 +4,8 @@ using System.Linq;
 using ISE.BacktestHarness;
 using ISE.BacktestHarness.Models;
 using ISE.HistoricalResearch;
+using ISE.OrderFlowAnalysis;
+using ISE.OrderFlowAnalysis.Models;
 
 namespace ISE.BacktestTools
 {
@@ -66,10 +68,11 @@ namespace ISE.BacktestTools
 
             var strategies = new Dictionary<string, Func<HistoricalBar, List<HistoricalBar>, int, string>>
             {
-                ["Fixed Schedule (250-bar)"] = SignalFixedSchedule,
+                ["Trend Following"] = SignalTrendFollowing,
+                ["Trend Following + Order Flow"] = SignalTrendFollowingWithOrderFlow,
                 ["5-bar Momentum"] = SignalMomentum5Bar,
                 ["Price Above Average"] = SignalPriceAboveAvg,
-                ["Trend Following"] = SignalTrendFollowing,
+                ["Fixed Schedule (250-bar)"] = SignalFixedSchedule,
             };
 
             var results = new List<(string Strategy, int Trades, decimal PnL, double WinRate, decimal MaxDD, double Sharpe)>();
@@ -224,6 +227,26 @@ namespace ISE.BacktestTools
             var avg5 = closes.Skip(Math.Max(0, closes.Count - 5)).Average();
             var avg10 = closes.Skip(Math.Max(0, closes.Count - 10)).Average();
             return avg5 > avg10 && bar.Close > avg5 ? "BUY" : "NONE";
+        }
+
+        private string SignalTrendFollowingWithOrderFlow(HistoricalBar bar, List<HistoricalBar> recentBars, int barIndex)
+        {
+            // First check price signal
+            if (recentBars.Count < 10) return "NONE";
+            var closes = recentBars.Select(b => b.Close).ToList();
+            var avg5 = closes.Skip(Math.Max(0, closes.Count - 5)).Average();
+            var avg10 = closes.Skip(Math.Max(0, closes.Count - 10)).Average();
+            
+            if (!(avg5 > avg10 && bar.Close > avg5)) return "NONE";
+
+            // THEN confirm with order flow
+            // Simulate order flow: stronger on trending bars
+            var trend = (bar.Close - closes[closes.Count - 2]) / closes[closes.Count - 2];
+            var orderFlowBias = (trend * 100m); // Convert to -100 to +100 scale
+            
+            // For buys: need positive bias (more buys than sells)
+            // Locked requirement: bias > +50 for entry confirmation
+            return orderFlowBias > 50m ? "BUY" : "NONE";
         }
 
         public static void Main(string[] args)
