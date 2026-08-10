@@ -91,7 +91,7 @@ namespace ISE.Compliance.Safety
         }
 
         /// <summary>
-        /// Record a closed trade's P&L
+        /// Record a closed trade's P&amp;L
         /// Equity updates automatically via CurrentEquity property
         /// </summary>
         public void RecordClosedTrade(double tradeProfit)
@@ -100,7 +100,7 @@ namespace ISE.Compliance.Safety
         }
 
         /// <summary>
-        /// Record unrealized P&L from open position
+        /// Record unrealized P&amp;L from open position
         /// </summary>
         public void UpdateUnrealizedPnl(double unrealizedPnl)
         {

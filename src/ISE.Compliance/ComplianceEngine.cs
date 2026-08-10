@@ -128,7 +128,7 @@ namespace ISE.Compliance
             {
                 return (false, 
                     $"Minimum hold time not met: {timeInTradeSeconds:F0}s < {MinimumHoldTimeSeconds}s " +
-                    $"(and P&L ${unrealizedPnL:F2} < target ${profitTarget:F2})");
+                    $"(and P&amp;L ${unrealizedPnL:F2} < target ${profitTarget:F2})");
             }
 
             // Otherwise always allow exit
