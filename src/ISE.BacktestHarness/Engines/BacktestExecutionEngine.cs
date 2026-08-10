@@ -114,16 +114,24 @@ namespace ISE.BacktestHarness.Engines
             if (_activeContracts > 0)
             {
                 if (_activeDirection == "LONG" && currentBar.Close >= _entryPrice + 1m)
-                    return "EXIT"; // Profit: +1 point = $20 on MNQ
+                    return "EXIT"; // Profit: +1 point
                 if (_activeDirection == "LONG" && currentBar.Close <= _entryPrice - 1m)
-                    return "EXIT"; // Stop: -1 point = -$20 on MNQ
+                    return "EXIT"; // Stop loss: -1 point (equal risk/reward)
             }
 
-            // Entry: Trade every 250 bars (20 trades total on 5000 bars)
-            // This is controlled, measurable, and lets us validate P&L math
-            if (_activeContracts == 0 && _barCount % 250 == 0 && _barCount > 0)
+            // Entry logic: Trend Following (validated signal from SignalTester)
+            // 5-bar average > 10-bar average (uptrend) + price above 5-bar (confirmation)
+            if (_activeContracts == 0 && _recentBars.Count >= 10)
             {
-                return "BUY";
+                var closes = _recentBars.Select(b => b.Close).ToList();
+                var avg5 = closes.Skip(Math.Max(0, closes.Count - 5)).Average();
+                var avg10 = closes.Skip(Math.Max(0, closes.Count - 10)).Average();
+                
+                // Uptrend confirmation
+                if (avg5 > avg10 && currentBar.Close > avg5)
+                {
+                    return "BUY";
+                }
             }
 
             return "NONE";
