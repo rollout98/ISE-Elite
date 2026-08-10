@@ -19,13 +19,13 @@ namespace ISE.BacktestTools
         {
             // Load mock data once
             _bars = GenerateMockBars();
-            _config = new BacktestConfiguration 
-            { 
-                MaximumContracts = 1, 
-                AdaptiveRiskMultiplier = 1.0m,
-                StopDistanceRisk = 20,
-                LiquidityCapacity = 100
-            };
+            _config = new BacktestConfiguration(
+                configId: 1,
+                maximumContracts: 1, 
+                adaptiveRiskMultiplier: 1.0,
+                stopDistanceRisk: 20,
+                liquidityCapacity: 100
+            );
         }
 
         private List<HistoricalBar> GenerateMockBars()
@@ -127,14 +127,16 @@ namespace ISE.BacktestTools
                     {
                         // Winning trade
                         var pnl = (bar.Close - entryPrice) * 20m * activeContracts;
-                        trades.Add(new BacktestTrade 
-                        { 
-                            Entry = entryPrice, 
-                            Exit = bar.Close, 
-                            PnL = pnl,
-                            Contracts = activeContracts,
-                            IsWin = pnl > 0
-                        });
+                        trades.Add(new BacktestTrade(
+                            entryTimeUtc: recentBars[recentBars.Count - 2].TimestampUtc,
+                            exitTimeUtc: bar.TimestampUtc,
+                            direction: "LONG",
+                            entryPrice: entryPrice,
+                            exitPrice: bar.Close,
+                            contracts: activeContracts,
+                            pnl: pnl,
+                            slippage: 0m
+                        ));
                         currentEquity += pnl;
                         pnlList.Add(pnl);
                         activeContracts = 0;
@@ -143,14 +145,16 @@ namespace ISE.BacktestTools
                     {
                         // Losing trade
                         var pnl = (bar.Close - entryPrice) * 20m * activeContracts;
-                        trades.Add(new BacktestTrade
-                        {
-                            Entry = entryPrice,
-                            Exit = bar.Close,
-                            PnL = pnl,
-                            Contracts = activeContracts,
-                            IsWin = false
-                        });
+                        trades.Add(new BacktestTrade(
+                            entryTimeUtc: recentBars[recentBars.Count - 2].TimestampUtc,
+                            exitTimeUtc: bar.TimestampUtc,
+                            direction: "LONG",
+                            entryPrice: entryPrice,
+                            exitPrice: bar.Close,
+                            contracts: activeContracts,
+                            pnl: pnl,
+                            slippage: 0m
+                        ));
                         currentEquity += pnl;
                         pnlList.Add(pnl);
                         activeContracts = 0;
