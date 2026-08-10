@@ -8,6 +8,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>BacktestConsole</AssemblyName>
     <RootNamespace>ISE.BacktestTools</RootNamespace>
+    <StartupObject>ISE.BacktestTools.Program</StartupObject>
+    <DefaultItemExcludes>$(DefaultItemExcludes);ISE.HistoricalResearch.DatasetValidator/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
