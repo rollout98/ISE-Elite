@@ -110,39 +110,20 @@ namespace ISE.BacktestHarness.Engines
 
         private string GenerateSignal(HistoricalBar currentBar)
         {
-            if (_recentBars.Count < 5) return "NONE";
-
-            var currentClose = currentBar.Close;
-
             // Exit logic - FIRST (profit/stop)
             if (_activeContracts > 0)
             {
-                if (_activeDirection == "LONG" && currentClose >= _entryPrice + 1m)
-                    return "EXIT"; // Profit target: +1 point (4 ticks)
-                if (_activeDirection == "LONG" && currentClose <= _entryPrice - 0.5m)
-                    return "EXIT"; // Stop loss: -0.5 points (2 ticks) — 2:1 RR
+                if (_activeDirection == "LONG" && currentBar.Close >= _entryPrice + 1m)
+                    return "EXIT"; // Profit: +1 point = $20 on MNQ
+                if (_activeDirection == "LONG" && currentBar.Close <= _entryPrice - 1m)
+                    return "EXIT"; // Stop: -1 point = -$20 on MNQ
             }
 
-            // Entry logic: Price momentum (5-bar breakout pattern)
-            // Only enter if price trending above average
-            if (_activeContracts == 0 && _recentBars.Count >= 5)
+            // Entry: Trade every 250 bars (20 trades total on 5000 bars)
+            // This is controlled, measurable, and lets us validate P&L math
+            if (_activeContracts == 0 && _barCount % 250 == 0 && _barCount > 0)
             {
-                var closes = _recentBars.Select(b => b.Close).ToList();
-                var avg5 = closes.Skip(Math.Max(0, closes.Count - 5)).Average();
-                var avg10 = closes.Skip(Math.Max(0, closes.Count - 10)).Average();
-                
-                // Uptrend: current price above both 5-bar and 10-bar averages
-                // AND price is making higher highs
-                if (currentClose > avg5 && avg5 > avg10)
-                {
-                    var prevClose = _recentBars[_recentBars.Count - 2].Close;
-                    
-                    // Buy only on upward momentum
-                    if (currentClose > prevClose)
-                    {
-                        return "BUY";
-                    }
-                }
+                return "BUY";
             }
 
             return "NONE";
