@@ -9,9 +9,11 @@
     <AssemblyName>StrategyTester</AssemblyName>
     <RootNamespace>ISE.BacktestTools</RootNamespace>
     <StartupObject>ISE.BacktestTools.StrategyTester</StartupObject>
+    <DefaultItemExcludes>$(DefaultItemExcludes);BacktestConsole.cs;SignalTester.cs</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../src/ISE.BacktestHarness/ISE.BacktestHarness.csproj" />
     <ProjectReference Include="../src/ISE.HistoricalResearch/ISE.HistoricalResearch.csproj" />
   </ItemGroup>
 
