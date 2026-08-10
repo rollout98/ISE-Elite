@@ -66,8 +66,7 @@ namespace ISE.BacktestHarness.Tests
                     low: low,
                     close: close,
                     volume: volume,
-                    sourceKind: HistoricalDataSourceKind.NinjaTraderProvider,
-                    source: "ISEEliteHistoricalBarsRequestProbe");
+                    sourceKind: HistoricalDataSourceKind.NinjaTraderProvider);
 
                 bars.Add(bar);
                 timestamp = timestamp.AddMinutes(1);
