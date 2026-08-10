@@ -40,7 +40,7 @@ namespace ISE.BacktestTools
             public int Contracts { get; set; }
             public decimal PnL { get; set; }
             public bool IsWin => PnL > 0;
-            public string Reason { get; set; }
+            public string? Reason { get; set; }
         }
 
         private readonly List<HistoricalBar> _bars;
