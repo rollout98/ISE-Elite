@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="../ISE.HistoricalResearch/ISE.HistoricalResearch.csproj" />
     <ProjectReference Include="../ISE.TradingBrain/ISE.TradingBrain.csproj" />
+    <ProjectReference Include="../ISE.OrderFlowAnalysis/ISE.OrderFlowAnalysis.csproj" />
   </ItemGroup>
 
 </Project>
