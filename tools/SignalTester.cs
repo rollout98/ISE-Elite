@@ -4,8 +4,6 @@ using System.Linq;
 using ISE.BacktestHarness;
 using ISE.BacktestHarness.Models;
 using ISE.HistoricalResearch;
-using ISE.OrderFlowAnalysis;
-using ISE.OrderFlowAnalysis.Models;
 
 namespace ISE.BacktestTools
 {
