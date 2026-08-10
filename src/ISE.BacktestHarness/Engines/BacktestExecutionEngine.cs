@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using ISE.BacktestHarness.Models;
 using ISE.HistoricalResearch;
-using ISE.OrderFlowAnalysis;
-using ISE.OrderFlowAnalysis.Models;
 
 namespace ISE.BacktestHarness.Engines
 {
@@ -27,9 +25,7 @@ namespace ISE.BacktestHarness.Engines
         private DateTime _entryTimeUtc = DateTime.MinValue;
         private int _barsHeld = 0;
 
-        // Order flow analysis
-        private readonly OrderFlowAnalysisEngine _orderFlowEngine = new OrderFlowAnalysisEngine();
-        private readonly MockDomDataGenerator _domGenerator = new MockDomDataGenerator();
+        // Recent price history
         private readonly List<HistoricalBar> _recentBars = new List<HistoricalBar>();
         private const int MaxRecentBars = 20;
 
@@ -63,7 +59,6 @@ namespace ISE.BacktestHarness.Engines
             _maxDrawdown = 0m;
             _activeContracts = 0;
             _recentBars.Clear();
-            _orderFlowEngine.Reset();
 
             var orderedBars = bars.OrderBy(b => b.TimestampUtc).ToList();
 
@@ -86,15 +81,11 @@ namespace ISE.BacktestHarness.Engines
                 }
 
                 // Check entry conditions
-                var (signal, confirmed) = GenerateSignalWithOrderFlowConfirmation(bar, config);
+                var signal = GeneratePriceActionSignal(bar);
 
-                if (signal == "BUY" && confirmed && _activeContracts == 0)
+                if (signal == "BUY" && _activeContracts == 0)
                 {
                     OpenPosition(bar, "LONG", config.MaximumContracts);
-                }
-                else if (signal == "SELL" && confirmed && _activeContracts == 0)
-                {
-                    OpenPosition(bar, "SHORT", config.MaximumContracts);
                 }
             }
 
@@ -112,42 +103,6 @@ namespace ISE.BacktestHarness.Engines
                 0m,
                 periodStart,
                 periodEnd);
-        }
-
-        /// <summary>
-        /// Generate signal AND confirm with order flow analysis
-        /// Returns (signal: "BUY"/"SELL"/"NONE", confirmed: bool)
-        /// </summary>
-        private (string signal, bool confirmed) GenerateSignalWithOrderFlowConfirmation(
-            HistoricalBar currentBar,
-            BacktestConfiguration config)
-        {
-            if (_recentBars.Count < 5) return ("NONE", false);
-
-            // Generate mock DOM snapshot for this bar
-            var domSnapshot = _domGenerator.GenerateDomSnapshot(currentBar.Close);
-
-            // Analyze order flow
-            var metrics = _orderFlowEngine.Analyze(
-                domSnapshot,
-                currentBar.Close,
-                currentBar.High,
-                currentBar.Low);
-
-            // Get price-action signal
-            var priceSignal = GeneratePriceActionSignal(currentBar);
-
-            if (priceSignal == "NONE")
-                return ("NONE", false);
-
-            // Confirm with order flow
-            var isConfirmed = _orderFlowEngine.IsEntryConfirmedByOrderFlow(
-                metrics,
-                priceSignal,
-                biasThreshold: 50,
-                absorptionThreshold: 30);
-
-            return (priceSignal, isConfirmed);
         }
 
         /// <summary>
