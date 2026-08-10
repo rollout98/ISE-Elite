@@ -8,6 +8,7 @@
     <OutputType>Library</OutputType>
     <AssemblyName>ISE.Integration</AssemblyName>
     <RootNamespace>ISE.Integration</RootNamespace>
+    <NoWarn>CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
