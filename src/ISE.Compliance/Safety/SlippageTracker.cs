@@ -46,7 +46,7 @@ namespace ISE.Compliance.Safety
         {
             var slippage = Math.Abs(actualPrice - intendedPrice);
 
-            if (_trades.Count == 0 || _trades.Last().ExitPrice == null)
+            if (_trades.Count == 0 || _trades.Last().ExitSlippage == null)
             {
                 // New trade entry
                 _trades.Add(new SlippageRecord
@@ -74,7 +74,7 @@ namespace ISE.Compliance.Safety
                 return;
 
             var lastTrade = _trades.Last();
-            if (lastTrade.ExitPrice != null)
+            if (lastTrade.ExitSlippage != null)
                 return; // Trade already closed
 
             var slippage = Math.Abs(actualPrice - intendedPrice);
@@ -100,7 +100,7 @@ namespace ISE.Compliance.Safety
             var recentTrades = _trades.Skip(_trades.Count - lookback).ToList();
 
             // Entry slippage
-            var completedTrades = recentTrades.Where(t => t.ExitPrice.HasValue).ToList();
+            var completedTrades = recentTrades.Where(t => t.ExitSlippage.HasValue).ToList();
             if (completedTrades.Count > 0)
             {
                 AverageEntrySlippage = completedTrades.Average(t => t.EntrySlippage);
@@ -146,7 +146,7 @@ namespace ISE.Compliance.Safety
         /// </summary>
         public SlippageRecord? GetWorstSlippageTrade()
         {
-            var completedTrades = _trades.Where(t => t.ExitPrice.HasValue).ToList();
+            var completedTrades = _trades.Where(t => t.ExitSlippage.HasValue).ToList();
             if (completedTrades.Count == 0)
                 return null;
 

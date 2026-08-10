@@ -2,7 +2,7 @@ namespace ISE.Compliance.Safety
 {
     /// <summary>
     /// EdgeDegradationDetector - Monitor win rate decline and pause trading if edge is lost
-    /// Core premise: If win rate < 55%, the edge has degraded and we should stop trading
+    /// Core premise: If win rate &lt; 55%, the edge has degraded and we should stop trading
     /// </summary>
     public class EdgeDegradationDetector
     {

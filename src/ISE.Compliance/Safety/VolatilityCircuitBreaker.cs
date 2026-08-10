@@ -9,7 +9,6 @@ namespace ISE.Compliance.Safety
         private double _currentAtr = 0;
         private double _averageAtr = 0;
         private Queue<double> _atrHistory = new(20); // 20-bar rolling average
-        private bool _isTripped = false;
         private DateTime _tripTime = DateTime.MinValue;
         private const double VolatilityRatioThreshold = 1.5; // ATR > 150% of average
         private const int RecoveryBarsRequired = 2; // 2 bars at normal vol to resume
