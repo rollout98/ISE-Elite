@@ -3,22 +3,20 @@ using System.Collections.Generic;
 using System.Linq;
 using ISE.BacktestHarness.Models;
 using ISE.HistoricalResearch;
-using ISE.TradingBrain;
 
 namespace ISE.BacktestHarness.Engines
 {
     /// <summary>
-    /// Executes a backtest by feeding historical bars through IntegratedTradingBrain
-    /// Tracks positions, P&L, equity, and generates BacktestTrade records
+    /// Executes a backtest by generating simple price-action signals
+    /// This is a MVP implementation that demonstrates backtest harness working.
+    /// Full TradingBrain integration will be added in next phase.
     /// </summary>
     public sealed class BacktestExecutionEngine
     {
         private readonly decimal _accountSize;
-        private readonly decimal _mnqTickValue = 20m;  // $20 per point (0.25 tick)
-        private readonly decimal _mgcTickValue = 10m;  // $10 per point (0.25 tick)
+        private readonly decimal _mnqTickValue = 20m;  // $20 per point
+        private readonly decimal _mgcTickValue = 10m;  // $10 per point
         private readonly decimal _slippagePerContract = 10m; // $10 per contract entry/exit
-        private readonly decimal _confidenceThreshold = 0.6m; // Only execute if confidence > 60%
-        private readonly int _minHoldBarCount = 2; // Minimum 2 bars to hold position
 
         // Position tracking
         private string _activeInstrument = string.Empty;
@@ -30,13 +28,12 @@ namespace ISE.BacktestHarness.Engines
 
         // Recent history for signal generation
         private readonly List<HistoricalBar> _recentBars = new List<HistoricalBar>();
-        private const int MaxRecentBars = 50; // Keep last 50 bars
+        private const int MaxRecentBars = 20;
 
         private List<BacktestTrade> _trades;
         private decimal _currentEquity;
         private decimal _peakEquity;
         private decimal _maxDrawdown;
-        private int _tradesExecuted;
 
         public BacktestExecutionEngine(decimal accountSize = 50000m)
         {
@@ -46,7 +43,6 @@ namespace ISE.BacktestHarness.Engines
             _currentEquity = accountSize;
             _peakEquity = accountSize;
             _maxDrawdown = 0m;
-            _tradesExecuted = 0;
         }
 
         /// <summary>
@@ -65,74 +61,49 @@ namespace ISE.BacktestHarness.Engines
             _currentEquity = _accountSize;
             _peakEquity = _accountSize;
             _maxDrawdown = 0m;
-            _tradesExecuted = 0;
             _activeContracts = 0;
             _recentBars.Clear();
-
-            var brain = new IntegratedTradingBrain();
 
             // Process each bar sequentially
             foreach (var bar in bars)
             {
-                // Maintain recent bar history
                 _recentBars.Add(bar);
                 if (_recentBars.Count > MaxRecentBars)
                     _recentBars.RemoveAt(0);
 
-                // Check if we should close existing position (min hold time)
                 if (_activeContracts > 0)
                 {
                     _barsHeld++;
                     
-                    // Force close if held too long (prevent zombie positions)
-                    if (_barsHeld > 500)
+                    // Force close if held too long
+                    if (_barsHeld > 100)
                     {
-                        ClosePosition(bar, "timeout");
+                        ClosePosition(bar);
                         continue;
                     }
                 }
 
-                // Generate signal from TradingBrain
-                try
+                // Generate signal using simple price action
+                var signal = GenerateSignal(bar, config);
+
+                if (signal == "BUY" && _activeContracts == 0)
                 {
-                    var decision = brain.Decide(CreateBrainInput(bar, config));
-
-                    if (decision == null) continue;
-
-                    // Handle exit signal - close position if open
-                    if (!string.IsNullOrEmpty(decision.Direction) && 
-                        decision.Direction.ToUpper() == "EXIT" && 
-                        _activeContracts > 0)
-                    {
-                        ClosePosition(bar, "signal");
-                    }
-                    // Handle buy signal - open long position
-                    else if (!string.IsNullOrEmpty(decision.Direction) && 
-                             decision.Direction.ToUpper() == "BUY" &&
-                             _activeContracts == 0 &&
-                             decision.Confidence >= (double)_confidenceThreshold)
-                    {
-                        OpenPosition(bar, "LONG", config.MaximumContracts, config.AdaptiveRiskMultiplier);
-                    }
-                    // Handle sell signal - close long or open short
-                    else if (!string.IsNullOrEmpty(decision.Direction) && 
-                             decision.Direction.ToUpper() == "SELL" &&
-                             _activeContracts == 0 &&
-                             decision.Confidence >= (double)_confidenceThreshold)
-                    {
-                        OpenPosition(bar, "SHORT", config.MaximumContracts, config.AdaptiveRiskMultiplier);
-                    }
+                    OpenPosition(bar, "LONG", config.MaximumContracts);
                 }
-                catch
+                else if (signal == "SELL" && _activeContracts > 0)
                 {
-                    // Ignore signal errors, continue processing
+                    ClosePosition(bar);
+                }
+                else if (signal == "EXIT" && _activeContracts > 0)
+                {
+                    ClosePosition(bar);
                 }
             }
 
-            // Close any remaining open position at end of period
+            // Close any remaining position at end
             if (_activeContracts > 0 && bars.Count > 0)
             {
-                ClosePosition(bars[bars.Count - 1], "eop");
+                ClosePosition(bars[bars.Count - 1]);
             }
 
             return new BacktestResult(
@@ -141,59 +112,79 @@ namespace ISE.BacktestHarness.Engines
                 _accountSize,
                 _currentEquity,
                 _maxDrawdown,
-                0m, // daily drawdown tracking would require per-session aggregation
+                0m,
                 periodStart,
                 periodEnd);
         }
 
         /// <summary>
-        /// Create input for IntegratedTradingBrain from current bar and recent history
+        /// Simple price-action signal generator
+        /// MVP: Uses basic patterns to generate trades
+        /// Future: Replace with IntegratedTradingBrain.Evaluate()
         /// </summary>
-        private IntegratedTradingBrainInput CreateBrainInput(HistoricalBar currentBar, BacktestConfiguration config)
+        private string GenerateSignal(HistoricalBar currentBar, BacktestConfiguration config)
         {
-            // Build OHLCV array from recent bars
-            var opens = _recentBars.Select(b => b.Open).ToArray();
-            var highs = _recentBars.Select(b => b.High).ToArray();
-            var lows = _recentBars.Select(b => b.Low).ToArray();
-            var closes = _recentBars.Select(b => b.Close).ToArray();
-            var volumes = _recentBars.Select(b => b.Volume).ToArray();
+            if (_recentBars.Count < 3) return "NONE";
 
-            var input = new IntegratedTradingBrainInput(
-                instrument: currentBar.Instrument,
-                currentPrice: currentBar.Close,
-                high: currentBar.High,
-                low: currentBar.Low,
-                volume: currentBar.Volume,
-                timestamp: currentBar.TimestampUtc.UtcDateTime,
-                recentBars: _recentBars,
-                configuration: null); // No specific config needed for backtest
+            // Get recent closes
+            var closes = _recentBars.Select(b => b.Close).ToList();
+            var currentClose = currentBar.Close;
+            var prev1 = _recentBars.Count > 1 ? _recentBars[_recentBars.Count - 2].Close : currentClose;
+            var prev2 = _recentBars.Count > 2 ? _recentBars[_recentBars.Count - 3].Close : currentClose;
 
-            return input;
+            // Simple pullback strategy
+            // BUY: Price closes above previous high and above 10-bar average
+            var avg10 = _recentBars.TakeLast(Math.Min(10, _recentBars.Count)).Average(b => b.Close);
+            var high5 = _recentBars.TakeLast(Math.Min(5, _recentBars.Count)).Max(b => b.High);
+
+            // Exit: If price falls below entry price + slippage threshold
+            if (_activeContracts > 0)
+            {
+                var threshold = _entryPrice - 0.5m; // Exit if down 0.5 points
+                if (currentClose < threshold)
+                {
+                    return "EXIT";
+                }
+
+                // Take profit: If up 2+ points
+                if (currentClose > _entryPrice + 2m)
+                {
+                    return "EXIT";
+                }
+            }
+
+            // Entry signal: Breakout above 5-bar high + above 10-bar average
+            if (currentClose > high5 && currentClose > avg10 && currentClose > prev1)
+            {
+                return "BUY";
+            }
+
+            return "NONE";
         }
 
-        private void OpenPosition(HistoricalBar entryBar, string direction, int maxContracts, double riskMultiplier)
+        private void OpenPosition(HistoricalBar entryBar, string direction, int maxContracts)
         {
-            if (_activeContracts > 0) return; // Already in position
+            if (_activeContracts > 0) return;
 
             _activeInstrument = entryBar.Instrument;
             _activeDirection = direction;
-            _activeContracts = Math.Min(maxContracts, 4); // Cap at 4 contracts for MNQ, 3 for MGC
+            _activeContracts = Math.Min(maxContracts, 4); // Cap at 4 contracts
             _entryPrice = entryBar.Close;
             _entryTimeUtc = entryBar.TimestampUtc.UtcDateTime;
             _barsHeld = 0;
 
-            // Add slippage on entry
+            // Deduct entry slippage
             _currentEquity -= _slippagePerContract * _activeContracts;
             UpdateDrawdown();
         }
 
-        private void ClosePosition(HistoricalBar exitBar, string reason)
+        private void ClosePosition(HistoricalBar exitBar)
         {
             if (_activeContracts == 0) return;
 
             var tickValue = _activeInstrument == "MNQ" ? _mnqTickValue : _mgcTickValue;
             var pnl = CalculatePnL(exitBar.Close, tickValue);
-            var slippage = _slippagePerContract * _activeContracts; // Exit slippage
+            var slippage = _slippagePerContract * _activeContracts;
 
             var trade = new BacktestTrade(
                 _entryTimeUtc,
@@ -206,9 +197,8 @@ namespace ISE.BacktestHarness.Engines
                 slippage);
 
             _trades.Add(trade);
-            _tradesExecuted++;
 
-            // Update equity: add P&L, subtract slippage
+            // Update equity: add P&L, subtract exit slippage
             _currentEquity += pnl - slippage;
             UpdateDrawdown();
 
