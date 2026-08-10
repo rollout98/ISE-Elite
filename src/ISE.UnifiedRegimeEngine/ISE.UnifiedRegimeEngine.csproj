@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../ISE.Core/ISE.Core.csproj" />
+    <ProjectReference Include="../ISE.OrderFlowIntelligence/ISE.OrderFlowIntelligence.csproj" />
   </ItemGroup>
 
 </Project>

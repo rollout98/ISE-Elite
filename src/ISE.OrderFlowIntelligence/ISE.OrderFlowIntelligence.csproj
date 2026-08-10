@@ -12,7 +12,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../ISE.Core/ISE.Core.csproj" />
-    <ProjectReference Include="../ISE.UnifiedRegimeEngine/ISE.UnifiedRegimeEngine.csproj" />
   </ItemGroup>
 
 </Project>
