@@ -104,7 +104,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
             // Arrange: Tight range, no directional bias
             for (int i = 1; i <= 25; i++)
             {
-                decimal basePrice = 150 + (i % 4 * 0.1); // Oscillates within 0.4 point range
+                double basePrice = 150 + (i % 4 * 0.1); // Oscillates within 0.4 point range
 
                 var bar = new RegimeInput
                 {
@@ -259,7 +259,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
             // Arrange: Volatile market with 2% moves per bar
             for (int i = 1; i <= 20; i++)
             {
-                decimal basePrice = 100 * (1 + ((i % 2 == 0 ? 0.02 : -0.02)));
+                double basePrice = 100 * (1 + ((i % 2 == 0 ? 0.02 : -0.02)));
 
                 var bar = new RegimeInput
                 {

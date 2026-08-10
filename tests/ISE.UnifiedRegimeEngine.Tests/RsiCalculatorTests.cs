@@ -103,7 +103,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
             // Arrange: Oscillating prices with equal ups and downs
             for (int i = 1; i <= 25; i++)
             {
-                decimal offset = i % 2 == 0 ? 0.2 : -0.2;
+                double offset = i % 2 == 0 ? 0.2 : -0.2;
 
                 var bar = new RegimeInput
                 {

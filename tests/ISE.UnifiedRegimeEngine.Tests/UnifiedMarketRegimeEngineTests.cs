@@ -57,7 +57,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
             // Feed 30 bars of tight range
             for (int i = 1; i <= 30; i++)
             {
-                decimal oscillation = Math.Sin(i * 0.5) * 10;
+                double oscillation = Math.Sin(i * 0.5) * 10;
 
                 var bar = new RegimeInput
                 {
@@ -266,7 +266,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
             // Phase 2: Transition to range
             for (int i = 21; i <= 40; i++)
             {
-                decimal oscillation = Math.Sin(i * 0.3) * 20;
+                double oscillation = Math.Sin(i * 0.3) * 20;
 
                 var bar = new RegimeInput
                 {
@@ -463,7 +463,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
                 }
             }
 
-            Assert.True(false, "Should have detected trending during opening drive");
+            Assert.Fail("Should have detected trending during opening drive");
         }
     }
 }

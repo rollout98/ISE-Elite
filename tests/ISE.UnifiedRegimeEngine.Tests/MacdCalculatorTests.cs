@@ -142,7 +142,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
             }
 
             // If we get here, we should have found at least one bullish cross
-            Assert.True(false, "Should have detected a bullish crossover");
+            Assert.Fail("Should have detected a bullish crossover");
         }
 
         /// <summary>
@@ -191,7 +191,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
             }
 
             // If we get here, we should have found at least one bearish cross
-            Assert.True(false, "Should have detected a bearish crossover");
+            Assert.Fail("Should have detected a bearish crossover");
         }
 
         /// <summary>
@@ -379,7 +379,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
             // Arrange: Very volatile market
             for (int i = 1; i <= 40; i++)
             {
-                decimal volatility = i % 3 == 0 ? 2.0m : -2.0m;
+                double volatility = i % 3 == 0 ? 2.0 : -2.0;
 
                 var bar = new RegimeInput
                 {

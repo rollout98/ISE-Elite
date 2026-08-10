@@ -223,7 +223,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
 
             // Assert
             Assert.NotNull(exitSignal);
-            Assert.True(exitSignal.ShouldExit, "Should exit when profit target hit");
+            Assert.NotNull(exitSignal); Assert.True(exitSignal!.ShouldExit, "Should exit when profit target hit");
             Assert.Contains("Profit target", exitSignal.ExitReason);
         }
 
@@ -255,7 +255,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
 
             // Assert
             Assert.NotNull(exitSignal);
-            Assert.True(exitSignal.ShouldExit, "Should exit when stop loss hit");
+            Assert.NotNull(exitSignal); Assert.True(exitSignal!.ShouldExit, "Should exit when stop loss hit");
             Assert.Contains("Stop loss", exitSignal.ExitReason);
         }
 
@@ -318,7 +318,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
 
             // Now test after minimum hold time
             exitSignal = logic.EvaluateExit(100.5, TimeSpan.FromMinutes(35), regime, orderFlow);
-            Assert.True(exitSignal.ShouldExit, "Should exit after minimum hold time when regime changes");
+            Assert.NotNull(exitSignal); Assert.True(exitSignal!.ShouldExit, "Should exit after minimum hold time when regime changes");
         }
 
         /// <summary>
@@ -338,7 +338,7 @@ namespace ISE.UnifiedRegimeEngine.Tests
             var exitSignal = logic.EvaluateExit(100.5, TimeSpan.FromMinutes(120), regime, orderFlow);
 
             // Assert
-            Assert.True(exitSignal.ShouldExit, "Should force exit at maximum hold time");
+            Assert.NotNull(exitSignal); Assert.True(exitSignal!.ShouldExit, "Should force exit at maximum hold time");
             Assert.Contains("Maximum hold", exitSignal.ExitReason);
         }
 
