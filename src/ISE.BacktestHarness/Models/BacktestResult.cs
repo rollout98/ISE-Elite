@@ -46,8 +46,22 @@ namespace ISE.BacktestHarness.Models
         public int LosingTrades => TotalTrades - WinningTrades;
         public double WinRate => TotalTrades > 0 ? (double)WinningTrades / TotalTrades * 100.0 : 0.0;
         public decimal AveragePnL => TotalTrades > 0 ? Trades.Sum(t => t.PnL) / TotalTrades : 0m;
-        public decimal LargestWin => Trades.Count > 0 ? Trades.Where(t => t.IsWin).Max(t => t.PnL) : 0m;
-        public decimal LargestLoss => Trades.Count > 0 ? Trades.Where(t => !t.IsWin).Min(t => t.PnL) : 0m;
+        public decimal LargestWin
+        {
+            get
+            {
+                var wins = Trades.Where(t => t.IsWin).ToList();
+                return wins.Count > 0 ? wins.Max(t => t.PnL) : 0m;
+            }
+        }
+        public decimal LargestLoss
+        {
+            get
+            {
+                var losses = Trades.Where(t => !t.IsWin).ToList();
+                return losses.Count > 0 ? losses.Min(t => t.PnL) : 0m;
+            }
+        }
         public decimal TotalSlippage => Trades.Sum(t => t.Slippage);
 
         // Risk metrics
