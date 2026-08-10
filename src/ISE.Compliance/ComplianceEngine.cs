@@ -181,7 +181,7 @@ namespace ISE.Compliance
         }
 
         /// <summary>
-        /// Update drawdown with unrealized P&L
+        /// Update drawdown with unrealized P&amp;L
         /// </summary>
         public void UpdateUnrealizedPnL(double unrealizedPnL)
         {
