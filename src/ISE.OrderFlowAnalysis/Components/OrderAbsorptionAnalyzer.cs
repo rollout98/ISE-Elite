@@ -66,7 +66,7 @@ namespace ISE.OrderFlowAnalysis.Components
 
             // Absorption: volume spikes then drops
             // Peak volume is 2x+ average, current is back to normal
-            var maxRecent = volumes.TakeLast(5).Max();
+            var maxRecent = volumes.Skip(Math.Max(0, volumes.Count - 5)).Max();
 
             if (maxRecent > avgVolume * 1.5 && lastVolume < avgVolume * 1.2)
             {
