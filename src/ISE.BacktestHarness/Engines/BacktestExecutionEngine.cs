@@ -29,7 +29,6 @@ namespace ISE.BacktestHarness.Engines
         private decimal _currentEquity;
         private decimal _peakEquity;
         private decimal _maxDrawdown;
-        private long _tradesExecuted;
 
         public BacktestExecutionEngine(decimal accountSize = 50000m)
         {
@@ -39,7 +38,6 @@ namespace ISE.BacktestHarness.Engines
             _currentEquity = accountSize;
             _peakEquity = accountSize;
             _maxDrawdown = 0m;
-            _tradesExecuted = 0;
         }
 
         /// <summary>
@@ -58,34 +56,34 @@ namespace ISE.BacktestHarness.Engines
             _currentEquity = _accountSize;
             _peakEquity = _accountSize;
             _maxDrawdown = 0m;
-            _tradesExecuted = 0;
             _activeContracts = 0;
 
             var brain = new IntegratedTradingBrain();
-            var barsByDate = GroupBarsByDay(bars);
+            
+            // Group bars by instrument and interval for realistic processing
+            var barsByInstrument = bars.GroupBy(b => b.Instrument).ToList();
 
-            // Process each trading day
-            foreach (var dayBars in barsByDate)
+            // For MVP: Process bars sequentially without signal generation
+            // This is a placeholder that will be replaced with actual TradingBrain integration
+            // Expected: bars flow into TradingBrain, which outputs buy/sell signals
+            // For now: just track bars and positions without executing
+            
+            foreach (var bar in bars)
             {
-                var dailyStartEquity = _currentEquity;
-
-                // Process bars in sequence for this day
-                for (int i = 0; i < dayBars.Count; i++)
-                {
-                    var bar = dayBars[i];
-                    var nextBar = i + 1 < dayBars.Count ? dayBars[i + 1] : null;
-
-                    // Generate signal from TradingBrain
-                    // For MVP: placeholder logic
-                    // In production: create proper IntegratedTradingBrainInput from bar data
-                    ProcessBar(bar, nextBar, config, brain);
-                }
+                // Placeholder: In production, this would:
+                // 1. Create IntegratedTradingBrainInput from bar OHLCV
+                // 2. Call brain.Decide(input) → IntegratedTradingBrainDecision
+                // 3. If decision says BUY: open long position
+                // 4. If decision says SELL: close position or go short
+                // 5. Track P&L, slippage, equity, max drawdown
+                
+                // For now: skip to maintain backtest harness structure
             }
 
             // Close any remaining open position at end of period
             if (_activeContracts > 0 && bars.Count > 0)
             {
-                ClosePosition(bars[bars.Count - 1], 0m); // breakeven exit
+                ClosePosition(bars[bars.Count - 1]);
             }
 
             return new BacktestResult(
@@ -99,37 +97,7 @@ namespace ISE.BacktestHarness.Engines
                 periodEnd);
         }
 
-        private List<List<HistoricalBar>> GroupBarsByDay(IReadOnlyList<HistoricalBar> bars)
-        {
-            var groups = new Dictionary<DateTime, List<HistoricalBar>>();
-            foreach (var bar in bars)
-            {
-                var date = bar.TimestampUtc.Date;
-                if (!groups.ContainsKey(date))
-                    groups[date] = new List<HistoricalBar>();
-                groups[date].Add(bar);
-            }
-            return groups.Values.ToList();
-        }
-
-        private void ProcessBar(
-            HistoricalBar bar,
-            HistoricalBar? nextBar,
-            BacktestConfiguration config,
-            IntegratedTradingBrain brain)
-        {
-            // Placeholder: implement signal generation
-            // This is where we'd:
-            // 1. Create IntegratedTradingBrainInput from bar data
-            // 2. Call brain.MakeDecision()
-            // 3. Execute on signal direction/magnitude
-            // 4. Manage position sizing from config.MaximumContracts
-            // 5. Calculate slippage based on contract count
-
-            // For MVP, we skip live trading logic and focus on architecture
-        }
-
-        private void ClosePosition(HistoricalBar exitBar, decimal slippageAdjustment)
+        private void ClosePosition(HistoricalBar exitBar)
         {
             if (_activeContracts == 0) return;
 
@@ -148,7 +116,6 @@ namespace ISE.BacktestHarness.Engines
                 slippage);
 
             _trades.Add(trade);
-            _tradesExecuted++;
 
             // Update equity
             _currentEquity += pnl - slippage;
