@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using ISE.BacktestHarness.Models;
 using ISE.HistoricalResearch;
+using ISE.OrderFlowAnalysis;
+using ISE.OrderFlowAnalysis.Models;
 
 namespace ISE.BacktestHarness.Engines
 {
     /// <summary>
-    /// Executes a backtest by generating simple price-action signals
-    /// This is a MVP implementation that demonstrates backtest harness working.
+    /// Executes a backtest using order flow confirmation for signals
+    /// Integrates OrderFlowAnalysisEngine for realistic entry/exit decisions
     /// </summary>
     public sealed class BacktestExecutionEngine
     {
@@ -25,6 +27,9 @@ namespace ISE.BacktestHarness.Engines
         private DateTime _entryTimeUtc = DateTime.MinValue;
         private int _barsHeld = 0;
 
+        // Order flow analysis
+        private readonly OrderFlowAnalysisEngine _orderFlowEngine = new OrderFlowAnalysisEngine();
+        private readonly MockDomDataGenerator _domGenerator = new MockDomDataGenerator();
         private readonly List<HistoricalBar> _recentBars = new List<HistoricalBar>();
         private const int MaxRecentBars = 20;
 
@@ -58,9 +63,8 @@ namespace ISE.BacktestHarness.Engines
             _maxDrawdown = 0m;
             _activeContracts = 0;
             _recentBars.Clear();
+            _orderFlowEngine.Reset();
 
-            // Group bars by instrument to process separately
-            var barsByInstrument = bars.GroupBy(b => b.Instrument).ToList();
             var orderedBars = bars.OrderBy(b => b.TimestampUtc).ToList();
 
             foreach (var bar in orderedBars)
@@ -73,22 +77,24 @@ namespace ISE.BacktestHarness.Engines
                 {
                     _barsHeld++;
                     
-                    if (_barsHeld > 50)
+                    // Check exit conditions
+                    if (ShouldExitPosition(bar))
                     {
                         ClosePosition(bar);
                         continue;
                     }
                 }
 
-                var signal = GenerateSignal(bar, config);
+                // Check entry conditions
+                var (signal, confirmed) = GenerateSignalWithOrderFlowConfirmation(bar, config);
 
-                if (signal == "BUY" && _activeContracts == 0)
+                if (signal == "BUY" && confirmed && _activeContracts == 0)
                 {
                     OpenPosition(bar, "LONG", config.MaximumContracts);
                 }
-                else if ((signal == "SELL" || signal == "EXIT") && _activeContracts > 0)
+                else if (signal == "SELL" && confirmed && _activeContracts == 0)
                 {
-                    ClosePosition(bar);
+                    OpenPosition(bar, "SHORT", config.MaximumContracts);
                 }
             }
 
@@ -109,10 +115,45 @@ namespace ISE.BacktestHarness.Engines
         }
 
         /// <summary>
-        /// Simple momentum-based signal generator
-        /// Generates trades on price momentum reversals
+        /// Generate signal AND confirm with order flow analysis
+        /// Returns (signal: "BUY"/"SELL"/"NONE", confirmed: bool)
         /// </summary>
-        private string GenerateSignal(HistoricalBar currentBar, BacktestConfiguration config)
+        private (string signal, bool confirmed) GenerateSignalWithOrderFlowConfirmation(
+            HistoricalBar currentBar,
+            BacktestConfiguration config)
+        {
+            if (_recentBars.Count < 5) return ("NONE", false);
+
+            // Generate mock DOM snapshot for this bar
+            var domSnapshot = _domGenerator.GenerateDomSnapshot(currentBar.Close);
+
+            // Analyze order flow
+            var metrics = _orderFlowEngine.Analyze(
+                domSnapshot,
+                currentBar.Close,
+                currentBar.High,
+                currentBar.Low);
+
+            // Get price-action signal
+            var priceSignal = GeneratePriceActionSignal(currentBar);
+
+            if (priceSignal == "NONE")
+                return ("NONE", false);
+
+            // Confirm with order flow
+            var isConfirmed = _orderFlowEngine.IsEntryConfirmedByOrderFlow(
+                metrics,
+                priceSignal,
+                biasThreshold: 50,
+                absorptionThreshold: 30);
+
+            return (priceSignal, isConfirmed);
+        }
+
+        /// <summary>
+        /// Price action signal (3 rising closes = BUY)
+        /// </summary>
+        private string GeneratePriceActionSignal(HistoricalBar currentBar)
         {
             if (_recentBars.Count < 5) return "NONE";
 
@@ -122,41 +163,39 @@ namespace ISE.BacktestHarness.Engines
             var prev2 = closes[closes.Count - 3];
             var prev3 = closes[closes.Count - 4];
 
-            // EXIT logic: Take profit or cut loss
-            if (_activeContracts > 0)
+            // 3 rising closes = momentum signal
+            if (currentClose > prev1 && prev1 > prev2 && prev2 > prev3)
             {
-                // Profit target: 1+ point move in favorable direction
-                if (_activeDirection == "LONG" && currentClose >= _entryPrice + 1m)
-                {
-                    return "EXIT";
-                }
-                
-                // Stop loss: 1 point against position
-                if (_activeDirection == "LONG" && currentClose <= _entryPrice - 1m)
-                {
-                    return "EXIT";
-                }
-                
-                // Trailing stop: Exit if price pulls back 0.5 points after hitting profit
-                if (_activeDirection == "LONG" && currentClose >= _entryPrice + 1.5m && currentClose < currentBar.High - 0.5m)
-                {
-                    return "EXIT";
-                }
-            }
-
-            // ENTRY logic: Simple momentum signal
-            // Buy: 3 bars of up closes (simple trend confirmation)
-            if (_activeContracts == 0 && currentClose > prev1 && prev1 > prev2 && prev2 > prev3)
-            {
-                // Additional filter: Not too extended (don't buy at highs)
                 var avg5 = _recentBars.TakeLast(5).Average(b => b.Close);
-                if (currentClose <= avg5 * 1.005m) // Within 0.5% of 5-bar average
+                if (currentClose <= avg5 * 1.005m)
                 {
                     return "BUY";
                 }
             }
 
             return "NONE";
+        }
+
+        /// <summary>
+        /// Check if position should be closed
+        /// </summary>
+        private bool ShouldExitPosition(HistoricalBar currentBar)
+        {
+            if (_activeContracts == 0) return false;
+
+            // Profit target: 1+ point
+            if (_activeDirection == "LONG" && currentBar.Close >= _entryPrice + 1m)
+                return true;
+
+            // Stop loss: 1 point
+            if (_activeDirection == "LONG" && currentBar.Close <= _entryPrice - 1m)
+                return true;
+
+            // Timeout: max 50 bars
+            if (_barsHeld > 50)
+                return true;
+
+            return false;
         }
 
         private void OpenPosition(HistoricalBar entryBar, string direction, int maxContracts)
