@@ -107,28 +107,28 @@ namespace ISE.BacktestHarness.Engines
 
         private string GenerateSignal(HistoricalBar currentBar)
         {
-            if (_recentBars.Count < 5) return "NONE";
+            if (_recentBars.Count < 3) return "NONE";
 
             var closes = _recentBars.Select(b => b.Close).ToList();
             var currentClose = currentBar.Close;
-            var prev1 = closes[closes.Count - 2];
-            var prev2 = closes[closes.Count - 3];
-            var prev3 = closes[closes.Count - 4];
 
-            // Exit logic
+            // Exit logic - FIRST (tighter exits)
             if (_activeContracts > 0)
             {
-                if (_activeDirection == "LONG" && currentClose >= _entryPrice + 1m)
-                    return "EXIT"; // Profit target
-                if (_activeDirection == "LONG" && currentClose <= _entryPrice - 1m)
-                    return "EXIT"; // Stop loss
+                if (_activeDirection == "LONG" && currentClose >= _entryPrice + 0.5m)
+                    return "EXIT"; // Profit target: 0.5 points (2 ticks)
+                if (_activeDirection == "LONG" && currentClose <= _entryPrice - 0.75m)
+                    return "EXIT"; // Stop loss: 0.75 points (3 ticks)
             }
 
-            // Entry logic: 3 rising closes
-            if (_activeContracts == 0 && currentClose > prev1 && prev1 > prev2 && prev2 > prev3)
+            // Entry logic: Price above 5-bar average (simplified momentum)
+            if (_activeContracts == 0 && _recentBars.Count >= 5)
             {
-                var avg5 = _recentBars.TakeLast(5).Average(b => b.Close);
-                if (currentClose <= avg5 * 1.005m)
+                var avg5 = _recentBars.Skip(Math.Max(0, _recentBars.Count - 5)).Average(b => b.Close);
+                var avgChange = (currentClose - avg5) / avg5;
+
+                // Buy if price is above average + slightly elevated (not just barely touching)
+                if (avgChange > 0.001m) // 0.1% above average
                 {
                     return "BUY";
                 }
