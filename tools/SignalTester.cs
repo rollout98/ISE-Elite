@@ -128,8 +128,8 @@ namespace ISE.BacktestTools
                         // Winning trade
                         var pnl = (bar.Close - entryPrice) * 20m * activeContracts;
                         trades.Add(new BacktestTrade(
-                            entryTimeUtc: recentBars[recentBars.Count - 2].TimestampUtc,
-                            exitTimeUtc: bar.TimestampUtc,
+                            entryTimeUtc: recentBars[recentBars.Count - 2].TimestampUtc.DateTime,
+                            exitTimeUtc: bar.TimestampUtc.DateTime,
                             direction: "LONG",
                             entryPrice: entryPrice,
                             exitPrice: bar.Close,
@@ -146,8 +146,8 @@ namespace ISE.BacktestTools
                         // Losing trade
                         var pnl = (bar.Close - entryPrice) * 20m * activeContracts;
                         trades.Add(new BacktestTrade(
-                            entryTimeUtc: recentBars[recentBars.Count - 2].TimestampUtc,
-                            exitTimeUtc: bar.TimestampUtc,
+                            entryTimeUtc: recentBars[recentBars.Count - 2].TimestampUtc.DateTime,
+                            exitTimeUtc: bar.TimestampUtc.DateTime,
                             direction: "LONG",
                             entryPrice: entryPrice,
                             exitPrice: bar.Close,
