@@ -167,7 +167,7 @@ namespace ISE.BacktestTools
                     }
                 }
 
-                // Entry logic: Trend Following + Order Flow Confirmation
+                // Entry logic: Trend Following + Order Flow Confirmation (relaxed for mock data)
                 if (activeContracts == 0 && recentBars.Count >= 10 && currentSession.TradeCount < 10)
                 {
                     var closes = recentBars.Select(b => b.Close).ToList();
@@ -177,14 +177,18 @@ namespace ISE.BacktestTools
                     // Trend Following signal
                     bool trendFollowing = avg5 > avg10 && bar.Close > avg5;
 
-                    // Order flow confirmation: simulate bias and absorption
-                    var orderFlowBias = (bar.Close - recentBars[recentBars.Count - 2].Close) / recentBars[recentBars.Count - 2].Close * 100m;
-                    var absorption = Math.Min(bar.Volume / 1500m, 100m);
+                    // Order flow simulation (relaxed thresholds for mock data)
+                    var prevClose = recentBars[recentBars.Count - 2].Close;
+                    var priceChangePercent = ((bar.Close - prevClose) / prevClose) * 100m;
+                    var orderFlowBias = Math.Min(Math.Abs(priceChangePercent) * 10m, 100m); // 0-100 scale
+                    var absorption = Math.Min((bar.Volume / 1000m), 100m); // Normalized volume
 
-                    bool orderFlowConfirmed = orderFlowBias > 50m && absorption > 30m;
+                    // Relaxed confirmation: trend + (bias > 20 OR absorption > 15)
+                    // This allows entries when trend is strong, even if order flow is moderate
+                    bool orderFlowConfirmed = trendFollowing && (orderFlowBias > 20m || absorption > 15m);
 
                     // Enter if trend + order flow confirmed
-                    if (trendFollowing && orderFlowConfirmed && maxContracts > 0)
+                    if (orderFlowConfirmed && maxContracts > 0)
                     {
                         entryPrice = bar.Close;
                         entryTime = bar.TimestampUtc.DateTime;
