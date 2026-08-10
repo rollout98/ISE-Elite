@@ -7,8 +7,7 @@ using ISE.HistoricalResearch;
 namespace ISE.BacktestHarness.Engines
 {
     /// <summary>
-    /// Executes a backtest using order flow confirmation for signals
-    /// Integrates OrderFlowAnalysisEngine for realistic entry/exit decisions
+    /// Executes a backtest using simple momentum signals
     /// </summary>
     public sealed class BacktestExecutionEngine
     {
@@ -71,21 +70,22 @@ namespace ISE.BacktestHarness.Engines
                 if (_activeContracts > 0)
                 {
                     _barsHeld++;
-                    
-                    // Check exit conditions
-                    if (ShouldExitPosition(bar))
+                    if (_barsHeld > 50)
                     {
                         ClosePosition(bar);
                         continue;
                     }
                 }
 
-                // Check entry conditions
-                var signal = GeneratePriceActionSignal(bar);
+                var signal = GenerateSignal(bar);
 
                 if (signal == "BUY" && _activeContracts == 0)
                 {
                     OpenPosition(bar, "LONG", config.MaximumContracts);
+                }
+                else if (signal == "EXIT" && _activeContracts > 0)
+                {
+                    ClosePosition(bar);
                 }
             }
 
@@ -105,10 +105,7 @@ namespace ISE.BacktestHarness.Engines
                 periodEnd);
         }
 
-        /// <summary>
-        /// Price action signal (3 rising closes = BUY)
-        /// </summary>
-        private string GeneratePriceActionSignal(HistoricalBar currentBar)
+        private string GenerateSignal(HistoricalBar currentBar)
         {
             if (_recentBars.Count < 5) return "NONE";
 
@@ -118,8 +115,17 @@ namespace ISE.BacktestHarness.Engines
             var prev2 = closes[closes.Count - 3];
             var prev3 = closes[closes.Count - 4];
 
-            // 3 rising closes = momentum signal
-            if (currentClose > prev1 && prev1 > prev2 && prev2 > prev3)
+            // Exit logic
+            if (_activeContracts > 0)
+            {
+                if (_activeDirection == "LONG" && currentClose >= _entryPrice + 1m)
+                    return "EXIT"; // Profit target
+                if (_activeDirection == "LONG" && currentClose <= _entryPrice - 1m)
+                    return "EXIT"; // Stop loss
+            }
+
+            // Entry logic: 3 rising closes
+            if (_activeContracts == 0 && currentClose > prev1 && prev1 > prev2 && prev2 > prev3)
             {
                 var avg5 = _recentBars.TakeLast(5).Average(b => b.Close);
                 if (currentClose <= avg5 * 1.005m)
@@ -129,28 +135,6 @@ namespace ISE.BacktestHarness.Engines
             }
 
             return "NONE";
-        }
-
-        /// <summary>
-        /// Check if position should be closed
-        /// </summary>
-        private bool ShouldExitPosition(HistoricalBar currentBar)
-        {
-            if (_activeContracts == 0) return false;
-
-            // Profit target: 1+ point
-            if (_activeDirection == "LONG" && currentBar.Close >= _entryPrice + 1m)
-                return true;
-
-            // Stop loss: 1 point
-            if (_activeDirection == "LONG" && currentBar.Close <= _entryPrice - 1m)
-                return true;
-
-            // Timeout: max 50 bars
-            if (_barsHeld > 50)
-                return true;
-
-            return false;
         }
 
         private void OpenPosition(HistoricalBar entryBar, string direction, int maxContracts)
