@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputType>Library</OutputType>
+    <AssemblyName>ISE.BacktestHarness</AssemblyName>
+    <RootNamespace>ISE.BacktestHarness</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ISE.HistoricalResearch/ISE.HistoricalResearch.csproj" />
+    <ProjectReference Include="../ISE.TradingBrain/ISE.TradingBrain.csproj" />
+  </ItemGroup>
+
+</Project>
