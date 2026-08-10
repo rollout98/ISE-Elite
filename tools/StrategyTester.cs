@@ -167,28 +167,18 @@ namespace ISE.BacktestTools
                     }
                 }
 
-                // Entry logic: Trend Following + Order Flow Confirmation (relaxed for mock data)
+                // Entry logic: Trend Following (simplified for mock data - order flow validation will use real DOM data)
                 if (activeContracts == 0 && recentBars.Count >= 10 && currentSession.TradeCount < 10)
                 {
                     var closes = recentBars.Select(b => b.Close).ToList();
                     var avg5 = closes.Skip(Math.Max(0, closes.Count - 5)).Average();
                     var avg10 = closes.Skip(Math.Max(0, closes.Count - 10)).Average();
 
-                    // Trend Following signal
+                    // Simplified entry: just need trend signal (5-bar > 10-bar + price > 5-bar)
                     bool trendFollowing = avg5 > avg10 && bar.Close > avg5;
 
-                    // Order flow simulation (relaxed thresholds for mock data)
-                    var prevClose = recentBars[recentBars.Count - 2].Close;
-                    var priceChangePercent = ((bar.Close - prevClose) / prevClose) * 100m;
-                    var orderFlowBias = Math.Min(Math.Abs(priceChangePercent) * 10m, 100m); // 0-100 scale
-                    var absorption = Math.Min((bar.Volume / 1000m), 100m); // Normalized volume
-
-                    // Relaxed confirmation: trend + (bias > 20 OR absorption > 15)
-                    // This allows entries when trend is strong, even if order flow is moderate
-                    bool orderFlowConfirmed = trendFollowing && (orderFlowBias > 20m || absorption > 15m);
-
-                    // Enter if trend + order flow confirmed
-                    if (orderFlowConfirmed && maxContracts > 0)
+                    // Enter on trend signal
+                    if (trendFollowing && maxContracts > 0)
                     {
                         entryPrice = bar.Close;
                         entryTime = bar.TimestampUtc.DateTime;
