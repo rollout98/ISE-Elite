@@ -38,8 +38,8 @@ namespace ISE.BacktestHarness
 
                 // Auto-detect delimiter: comma or tab
                 char delimiter = ',';
-                if (headerLine.Contains('	'))
-                    delimiter = '	';
+                if (headerLine.Contains('\t'))
+                    delimiter = '\t';
                 
                 var headers = headerLine.Split(delimiter);
                 int timeIdx = Array.IndexOf(headers, "time");
@@ -87,7 +87,7 @@ namespace ISE.BacktestHarness
             if (records.Count == 0)
                 throw new InvalidOperationException("No valid signal records found in CSV");
 
-            Console.WriteLine($"✅ Loaded {records.Count} signal records from {Path.GetFileName(csvPath)} (delimiter: {(headerLine.Contains('	') ? 'TAB' : 'COMMA')})");
+            Console.WriteLine($"✅ Loaded {records.Count} signal records from {Path.GetFileName(csvPath)} (delimiter: {(headerLine.Contains('\t') ? "TAB" : "COMMA")})");
             Console.WriteLine($"   Range: {records[0].TimestampUtc:yyyy-MM-dd HH:mm:ss Z} to {records[records.Count - 1].TimestampUtc:yyyy-MM-dd HH:mm:ss Z}");
 
             var signalFireCount = records.Count(r => r.Signal != "NONE");
