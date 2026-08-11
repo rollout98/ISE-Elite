@@ -14,7 +14,7 @@ namespace ISE.BacktestHarness
         public sealed class SignalRecord
         {
             public DateTime TimestampUtc { get; set; }
-            public string Signal { get; set; } // "BUY", "SELL", or "NONE"
+            public string Signal { get; set; } = "NONE"; // "BUY", "SELL", or "NONE"
         }
 
         /// <summary>
@@ -29,17 +29,21 @@ namespace ISE.BacktestHarness
 
             var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
             var records = new List<SignalRecord>();
+            var delimiterType = "COMMA"; // track delimiter for logging
 
             using (var reader = new StreamReader(csvPath))
             {
-                string headerLine = reader.ReadLine();
+                string? headerLine = reader.ReadLine();
                 if (headerLine == null)
                     throw new InvalidOperationException("CSV is empty");
 
                 // Auto-detect delimiter: comma or tab
                 char delimiter = ',';
                 if (headerLine.Contains('\t'))
+                {
                     delimiter = '\t';
+                    delimiterType = "TAB";
+                }
                 
                 var headers = headerLine.Split(delimiter);
                 int timeIdx = Array.IndexOf(headers, "time");
@@ -55,7 +59,7 @@ namespace ISE.BacktestHarness
                         $"Found: {string.Join(", ", headers)}");
                 }
 
-                string line;
+                string? line;
                 int lineNum = 1;
                 while ((line = reader.ReadLine()) != null)
                 {
@@ -87,7 +91,7 @@ namespace ISE.BacktestHarness
             if (records.Count == 0)
                 throw new InvalidOperationException("No valid signal records found in CSV");
 
-            Console.WriteLine($"✅ Loaded {records.Count} signal records from {Path.GetFileName(csvPath)} (delimiter: {(headerLine.Contains('\t') ? "TAB" : "COMMA")})");
+            Console.WriteLine($"✅ Loaded {records.Count} signal records from {Path.GetFileName(csvPath)} (delimiter: {delimiterType})");
             Console.WriteLine($"   Range: {records[0].TimestampUtc:yyyy-MM-dd HH:mm:ss Z} to {records[records.Count - 1].TimestampUtc:yyyy-MM-dd HH:mm:ss Z}");
 
             var signalFireCount = records.Count(r => r.Signal != "NONE");

@@ -40,7 +40,7 @@ namespace ISE.BacktestHarness
         /// </summary>
         public void Run(
             IReadOnlyList<HistoricalBar> historicalBars,
-            IReadOnlyList<VectorFlowSignalLoader.SignalRecord> externalSignals = null)
+            IReadOnlyList<VectorFlowSignalLoader.SignalRecord>? externalSignals = null)
         {
             if (historicalBars == null || historicalBars.Count == 0)
                 throw new ArgumentException("Historical bars required.", nameof(historicalBars));
