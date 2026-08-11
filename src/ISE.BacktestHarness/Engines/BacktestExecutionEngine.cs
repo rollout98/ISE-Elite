@@ -16,7 +16,11 @@ namespace ISE.BacktestHarness.Engines
         // $20/point is NQ, the full-size contract — using it overstates MNQ P&L by 10x.
         private readonly decimal _mnqPointValue = 2m;
         private readonly decimal _mgcPointValue = 10m;
-        private readonly decimal _slippagePerContract = 10m;
+        // MNQ tick = 0.25 pt = $0.50. One tick of slippage per side is realistic for a
+        // liquid micro; $10/side (the previous value) implied 5 POINTS of slip per side
+        // and was single-handedly responsible for the -409% result on 2026-08-11.
+        private readonly decimal _slippagePerContract = 0.50m;   // per side
+        private readonly decimal _commissionPerContract = 0.37m; // per side, typical retail all-in
 
         // Position tracking
         private string _activeInstrument = string.Empty;
@@ -25,6 +29,10 @@ namespace ISE.BacktestHarness.Engines
         private decimal _entryPrice = 0m;
         private DateTime _entryTimeUtc = DateTime.MinValue;
         private int _barsHeld = 0;
+
+        // Exit geometry for the active trade, set from BacktestConfiguration at entry.
+        private decimal _stopPoints = 1m;
+        private decimal _targetPoints = 1m;
         private int _barCount = 0;
 
         // Recent price history
@@ -62,6 +70,12 @@ namespace ISE.BacktestHarness.Engines
             _activeContracts = 0;
             _recentBars.Clear();
             _barCount = 0;
+
+            // Wire the sweep parameters to actual trade geometry. Previously only
+            // MaximumContracts was read, so all 420 configurations produced identical
+            // results and the sweep tested nothing.
+            _stopPoints = (decimal)config.StopDistanceRisk;
+            _targetPoints = _stopPoints * (decimal)config.AdaptiveRiskMultiplier;
 
             var orderedBars = bars.OrderBy(b => b.TimestampUtc).ToList();
 
@@ -115,10 +129,13 @@ namespace ISE.BacktestHarness.Engines
             // Exit logic - FIRST (profit/stop)
             if (_activeContracts > 0)
             {
-                if (_activeDirection == "LONG" && currentBar.Close >= _entryPrice + 1m)
-                    return "EXIT"; // Profit: +1 point
-                if (_activeDirection == "LONG" && currentBar.Close <= _entryPrice - 1m)
-                    return "EXIT"; // Stop loss: -1 point (equal risk/reward)
+                // Stop checked against the bar LOW, target against the bar HIGH, so an
+                // intrabar stop-out is not masked by a favourable close. Stop is checked
+                // first: if a bar spans both levels, assume the loss.
+                if (_activeDirection == "LONG" && currentBar.Low <= _entryPrice - _stopPoints)
+                    return "EXIT";
+                if (_activeDirection == "LONG" && currentBar.High >= _entryPrice + _targetPoints)
+                    return "EXIT";
             }
 
             // Entry logic: Trend Following (validated signal from SignalTester)
@@ -150,7 +167,7 @@ namespace ISE.BacktestHarness.Engines
             _entryTimeUtc = entryBar.TimestampUtc.UtcDateTime;
             _barsHeld = 0;
 
-            _currentEquity -= _slippagePerContract * _activeContracts;
+            _currentEquity -= (_slippagePerContract + _commissionPerContract) * _activeContracts;
             UpdateDrawdown();
         }
 
@@ -159,15 +176,31 @@ namespace ISE.BacktestHarness.Engines
             if (_activeContracts == 0) return;
 
             var pointValue = _activeInstrument == "MNQ" ? _mnqPointValue : _mgcPointValue;
-            var pnl = CalculatePnL(exitBar.Close, pointValue);
-            var slippage = _slippagePerContract * _activeContracts;
+
+            // Fill at the level that triggered the exit, not the bar close. The signal
+            // fires on the bar's high/low, so filling at Close invents P&L that the
+            // trade never had. Stop is tested first: if a bar spans both levels we
+            // assume the adverse fill rather than the favourable one.
+            var stopLevel = _entryPrice - _stopPoints;
+            var targetLevel = _entryPrice + _targetPoints;
+
+            decimal exitPrice;
+            if (_activeDirection == "LONG" && exitBar.Low <= stopLevel)
+                exitPrice = stopLevel;
+            else if (_activeDirection == "LONG" && exitBar.High >= targetLevel)
+                exitPrice = targetLevel;
+            else
+                exitPrice = exitBar.Close; // time-based exit (50-bar cap or end of data)
+
+            var pnl = CalculatePnL(exitPrice, pointValue);
+            var slippage = (_slippagePerContract + _commissionPerContract) * _activeContracts;
 
             var trade = new BacktestTrade(
                 _entryTimeUtc,
                 exitBar.TimestampUtc.UtcDateTime,
                 _activeDirection,
                 _entryPrice,
-                exitBar.Close,
+                exitPrice,
                 _activeContracts,
                 pnl,
                 slippage);

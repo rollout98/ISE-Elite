@@ -20,11 +20,14 @@ namespace ISE.BacktestHarness.Engines
             // MaximumContracts: 1-4 (5 values)
             var contractCounts = new[] { 1, 2, 3, 4 };
 
-            // AdaptiveRiskMultiplier: 0.5 to 2.0 in 0.25 steps (7 values)
-            var riskMultipliers = new[] { 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0 };
+            // StopDistanceRisk: stop distance in POINTS below entry (5 values).
+            // Was documented as "ticks" but never consumed by the engine.
+            var stopDistances = new[] { 2.0, 4.0, 6.0, 10.0, 15.0 };
 
-            // StopDistanceRisk: 10-30 ticks in 5-tick steps (5 values)
-            var stopDistances = new[] { 10.0, 15.0, 20.0, 25.0, 30.0 };
+            // AdaptiveRiskMultiplier: reward:risk ratio. Profit target = stop * this.
+            // 0.5 = scalper (target smaller than stop, high win rate, small wins)
+            // 3.0 = trend rider (target far beyond stop, low win rate, large wins)
+            var riskMultipliers = new[] { 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0 };
 
             // LiquidityCapacity: 50%-150% in 25% steps (5 values)
             var liquidityCapacities = new[] { 50.0, 75.0, 100.0, 125.0, 150.0 };
