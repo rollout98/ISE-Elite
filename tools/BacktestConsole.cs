@@ -194,7 +194,7 @@ namespace ISE.BacktestTools
             {
                 Console.WriteLine($"   ⚠️  No dataset found for {instrument}");
                 Console.WriteLine($"   Set ISE_DATASET_{instrument} to the .tsv path, or place the file in");
-                Console.WriteLine($"   Documents\NinjaTrader 8\ISEEliteResearch\ with '{instrument}' in its name.");
+                Console.WriteLine($@"   Documents\NinjaTrader 8\ISEEliteResearch\ with '{instrument}' in its name.");
                 return new List<HistoricalBar>();
             }
 
