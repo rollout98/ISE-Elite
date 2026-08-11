@@ -20,10 +20,12 @@ namespace NinjaTrader.NinjaScript.Indicators
     {
         private bool started;
 
-        private static readonly DateTime RequestedFromCentral = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Unspecified);
-        private static readonly DateTime RequestedToCentral = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Unspecified);
-        private static readonly TimeSpan NyWindowStart = new TimeSpan(6, 0, 0);
-        private static readonly TimeSpan NyWindowEnd = new TimeSpan(11, 0, 0);
+        // WIDENED 2026-08-11: was Jun1-Aug1 / 06:00-11:00 CT (NY-only research window).
+        // Full 24h is required to study Asia + London hours, not just the NY session.
+        private static readonly DateTime RequestedFromCentral = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        private static readonly DateTime RequestedToCentral = new DateTime(2026, 8, 11, 0, 0, 0, DateTimeKind.Unspecified);
+        private static readonly TimeSpan NyWindowStart = TimeSpan.Zero;
+        private static readonly TimeSpan NyWindowEnd = new TimeSpan(24, 0, 0);
         private const int IntervalSeconds = 60;
         private const string TradingHoursTemplate = "CME US Index Futures ETH";
 
@@ -109,7 +111,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 var safeInstrument = instrumentFullName.Replace(' ', '-').Replace('/', '-').Replace('\\', '-');
                 var outputPath = Path.Combine(
                     outputDirectory,
-                    "ny-" + safeInstrument + "-20260601-20260731-0600-1100-60s-repository.tsv");
+                    "ny-" + safeInstrument
+                        + "-" + RequestedFromCentral.ToString("yyyyMMdd")
+                        + "-" + RequestedToCentral.AddDays(-1).ToString("yyyyMMdd")
+                        + "-" + ((int)NyWindowStart.TotalHours).ToString("00") + "00"
+                        + "-" + ((int)NyWindowEnd.TotalHours).ToString("00") + "00"
+                        + "-60s-repository.tsv");
 
                 WriteHistoricalDataFile(outputPath, instrumentFullName, selected, centralTimeZone);
 
