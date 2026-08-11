@@ -35,6 +35,7 @@ namespace ISE.BacktestHarness.Engines
         private decimal _targetPoints = 1m;
         private int _maxHoldBars = 50;
         private bool _useTrailingStop = false;
+        private Dictionary<DateTime, string> _externalSignals = new Dictionary<DateTime, string>();
         private int _trendFilterBars = 0; // 0 = disabled
         private decimal _bestPrice = 0m; // best price reached in the trade's favour
         private int _barCount = 0;
@@ -145,6 +146,19 @@ namespace ISE.BacktestHarness.Engines
                 periodEnd);
         }
 
+        /// <summary>
+        /// Inject pre-computed signals (e.g., from VectorFlow CSV). If this is called,
+        /// GenerateSignal() will read from this dictionary instead of computing
+        /// crossovers. Keys are bar timestamps (UTC), values are "BUY", "SELL", "NONE".
+        /// </summary>
+        public void LoadExternalSignals(IEnumerable<(DateTime timestamp, string signal)> signals)
+        {
+            _externalSignals.Clear();
+            foreach (var (ts, sig) in signals)
+                _externalSignals[ts] = sig;
+            Console.WriteLine($"   Loaded {_externalSignals.Count} external signal mappings");
+        }
+
         private string GenerateSignal(HistoricalBar currentBar)
         {
             // Exit first: stop before target, so a bar spanning both is booked as a loss.
@@ -154,7 +168,19 @@ namespace ISE.BacktestHarness.Engines
                 if (TargetTouched(currentBar)) return "EXIT";
             }
 
-            // Entry: symmetric trend filter. The long-only version could not participate
+            // If external signals are loaded (e.g., VectorFlow from CSV), use those.
+            // Otherwise fall through to the computed 5/10 MA filter below.
+            if (_externalSignals.Count > 0)
+            {
+                if (_externalSignals.TryGetValue(currentBar.TimestampUtc.UtcDateTime, out var sig))
+                {
+                    return sig == "NONE" ? "NONE" : sig; // BUY, SELL, or NONE
+                }
+                return "NONE";
+            }
+
+            // Computed entry (5/10 MA crossover with optional trend filter).
+            // Used only when external signals are NOT loaded. The long-only version could not participate
             // in downtrends at all - roughly half of every trend in the data was
             // structurally untradeable before 2026-08-11.
             if (_activeContracts == 0 && _recentBars.Count >= 10)

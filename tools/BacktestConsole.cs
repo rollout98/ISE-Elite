@@ -56,6 +56,27 @@ namespace ISE.BacktestTools
                 var barsByInstrument = bars.GroupBy(b => b.Instrument).ToList();
                 Console.WriteLine($"✅ Loaded {bars.Count:N0} bars across {barsByInstrument.Count} instruments\n");
 
+                // Load external signals (e.g., VectorFlow from CSV)
+                IReadOnlyList<VectorFlowSignalLoader.SignalRecord> signals = null;
+                var signalCsvPath = Environment.GetEnvironmentVariable("ISE_SIGNALS");
+
+                if (!string.IsNullOrWhiteSpace(signalCsvPath))
+                {
+                    Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                    Console.WriteLine("Loading External Signals (VectorFlow CSV)");
+                    Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+                    try
+                    {
+                        signals = VectorFlowSignalLoader.LoadFromCsv(signalCsvPath);
+                        Console.WriteLine();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"⚠️  WARNING: Could not load signal CSV: {ex.Message}");
+                        Console.WriteLine("   Proceeding with computed signals (5/10 MA crossover)\n");
+                    }
+                }
+
                 foreach (var group in barsByInstrument)
                 {
                     var barsByInterval = group.GroupBy(b => b.IntervalSeconds).ToList();
@@ -79,7 +100,7 @@ namespace ISE.BacktestTools
                 var accountSize = 50000m;
                 var orchestrator = new BacktestOrchestrator(accountSize, "./backtest-results");
 
-                orchestrator.Run(bars);
+                orchestrator.Run(bars, signals);
 
                 sw.Stop();
 

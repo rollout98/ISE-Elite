@@ -38,7 +38,9 @@ namespace ISE.BacktestHarness
         /// var bars = LoadBarsFromNinjaTrader(); // Your implementation
         /// orchestrator.Run(bars);
         /// </summary>
-        public void Run(IReadOnlyList<HistoricalBar> historicalBars)
+        public void Run(
+            IReadOnlyList<HistoricalBar> historicalBars,
+            IReadOnlyList<VectorFlowSignalLoader.SignalRecord> externalSignals = null)
         {
             if (historicalBars == null || historicalBars.Count == 0)
                 throw new ArgumentException("Historical bars required.", nameof(historicalBars));
@@ -66,6 +68,15 @@ namespace ISE.BacktestHarness
             Console.WriteLine("STEP 2: Running backtests...");
             sw.Restart();
             var engine = new BacktestExecutionEngine(_accountSize);
+
+            // If external signals are provided, inject them once at the start
+            if (externalSignals != null && externalSignals.Count > 0)
+            {
+                var signalTuples = externalSignals.Select(sr => (sr.TimestampUtc, sr.Signal));
+                engine.LoadExternalSignals(signalTuples);
+                Console.WriteLine($"✅ Engine loaded {externalSignals.Count} external signals\n");
+            }
+
             var results = new List<BacktestResult>();
 
             int completedConfigs = 0;
