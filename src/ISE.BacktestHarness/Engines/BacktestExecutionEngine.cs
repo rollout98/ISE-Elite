@@ -35,12 +35,16 @@ namespace ISE.BacktestHarness.Engines
         private decimal _targetPoints = 1m;
         private int _maxHoldBars = 50;
         private bool _useTrailingStop = false;
+        private int _trendFilterBars = 0; // 0 = disabled
         private decimal _bestPrice = 0m; // best price reached in the trade's favour
         private int _barCount = 0;
 
         // Recent price history
         private readonly List<HistoricalBar> _recentBars = new List<HistoricalBar>();
-        private const int MaxRecentBars = 20;
+        // Was 20. A 20-bar window cannot represent a daily trend at all - the engine
+        // could only ever see the last 20 minutes, so every 3-minute wiggle looked
+        // identical to the day's real move. 480 bars = 8 hours of context.
+        private const int MaxRecentBars = 480;
 
         private List<BacktestTrade> _trades;
         private decimal _currentEquity;
@@ -81,6 +85,7 @@ namespace ISE.BacktestHarness.Engines
             _targetPoints = _stopPoints * (decimal)config.AdaptiveRiskMultiplier;
             _maxHoldBars = (int)config.LiquidityCapacity;
             _useTrailingStop = config.UseTrailingStop;
+            _trendFilterBars = config.TrendFilterBars;
 
             var orderedBars = bars.OrderBy(b => b.TimestampUtc).ToList();
 
@@ -158,11 +163,37 @@ namespace ISE.BacktestHarness.Engines
                 var avg5 = closes.Skip(Math.Max(0, closes.Count - 5)).Average();
                 var avg10 = closes.Skip(Math.Max(0, closes.Count - 10)).Average();
 
-                if (avg5 > avg10 && currentBar.Close > avg5) return "BUY";
-                if (avg5 < avg10 && currentBar.Close < avg5) return "SELL";
+                // Higher-timeframe gate. The 1-minute cross only fires when it agrees
+                // with the slower trend, so the engine stops taking every wiggle and
+                // only participates in moves that the wider context supports.
+                var bias = TrendBias(currentBar);
+
+                if (avg5 > avg10 && currentBar.Close > avg5 && bias >= 0) return "BUY";
+                if (avg5 < avg10 && currentBar.Close < avg5 && bias <= 0) return "SELL";
             }
 
             return "NONE";
+        }
+
+        /// <summary>
+        /// +1 up, -1 down, 0 when the filter is off or there is not enough history.
+        /// Compares price to a slow moving average over _trendFilterBars bars.
+        /// </summary>
+        private int TrendBias(HistoricalBar currentBar)
+        {
+            if (_trendFilterBars <= 0) return 0;
+            if (_recentBars.Count < _trendFilterBars) return 0;
+
+            var window = _recentBars.Skip(_recentBars.Count - _trendFilterBars).ToList();
+            var slowAvg = window.Average(b => b.Close);
+
+            // Require the slow average to also be RISING/FALLING, not merely below or
+            // above price - a flat average with price above it is chop, not a trend.
+            var halfAvg = window.Skip(window.Count / 2).Average(b => b.Close);
+
+            if (currentBar.Close > slowAvg && halfAvg > slowAvg) return 1;
+            if (currentBar.Close < slowAvg && halfAvg < slowAvg) return -1;
+            return 0;
         }
 
         // Single source of truth for trade geometry. Both GenerateSignal and

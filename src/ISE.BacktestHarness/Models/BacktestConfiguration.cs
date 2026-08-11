@@ -11,7 +11,8 @@ namespace ISE.BacktestHarness.Models
             double adaptiveRiskMultiplier,
             double stopDistanceRisk,
             double liquidityCapacity,
-            bool useTrailingStop = false)
+            bool useTrailingStop = false,
+            int trendFilterBars = 0)
         {
             ConfigId = configId;
             MaximumContracts = maximumContracts;
@@ -19,6 +20,7 @@ namespace ISE.BacktestHarness.Models
             StopDistanceRisk = stopDistanceRisk;
             LiquidityCapacity = liquidityCapacity;
             UseTrailingStop = useTrailingStop;
+            TrendFilterBars = trendFilterBars;
         }
 
         public int ConfigId { get; }
@@ -35,6 +37,14 @@ namespace ISE.BacktestHarness.Models
         /// </summary>
         public bool UseTrailingStop { get; }
 
+        /// <summary>
+        /// Higher-timeframe gate, in 1-minute bars. 0 disables it. The 1-min entry
+        /// only fires when it agrees with this slower trend, which is what separates
+        /// the day's real move from the ~72 wiggles a day that look the same to a
+        /// short-memory crossover.
+        /// </summary>
+        public int TrendFilterBars { get; }
+
         public override string ToString()
         {
             return $"Config{ConfigId}: Contracts={MaximumContracts}, " +
@@ -43,7 +53,8 @@ namespace ISE.BacktestHarness.Models
                    $"MaxHold={LiquidityCapacity:F0}bars, " +
                    (UseTrailingStop
                        ? $"Exit=TRAIL {StopDistanceRisk:F0}pt"
-                       : $"Exit=FIXED {StopDistanceRisk * AdaptiveRiskMultiplier:F0}pt");
+                       : $"Exit=FIXED {StopDistanceRisk * AdaptiveRiskMultiplier:F0}pt") +
+                   (TrendFilterBars > 0 ? $", Filter={TrendFilterBars}bar" : ", Filter=OFF");
         }
     }
 }

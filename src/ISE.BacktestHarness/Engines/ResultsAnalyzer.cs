@@ -26,7 +26,7 @@ namespace ISE.BacktestHarness.Engines
             using (var writer = new StreamWriter(outputPath, false, Encoding.UTF8))
             {
                 // Header
-                writer.WriteLine("Rank,ConfigId,MaxContracts,RiskMult,StopDist,MaxHoldBars,ExitMode," +
+                writer.WriteLine("Rank,ConfigId,MaxContracts,RiskMult,StopDist,MaxHoldBars,TrendFilter,ExitMode," +
                                 "GrossProfit,ReturnPct,TotalTrades,WinRate,WinTrades,LossTrades," +
                                 "AvgPnL,LargestWin,LargestLoss,MaxDD,ProfitFactor,Sharpe,Score");
 
@@ -41,6 +41,7 @@ namespace ISE.BacktestHarness.Engines
                         $"{result.Config.AdaptiveRiskMultiplier:F2}," +
                         $"{result.Config.StopDistanceRisk:F2}," +
                         $"{result.Config.LiquidityCapacity:F0}," +
+                        $"{result.Config.TrendFilterBars}," +
                         $"{(result.Config.UseTrailingStop ? "TRAIL" : "FIXED")}," +
                         $"{result.GrossProfit:F2}," +
                         $"{result.ReturnPercent:F2}," +
@@ -104,6 +105,12 @@ namespace ISE.BacktestHarness.Engines
 
                 // Long/short split. A blended figure can hide one side carrying the
                 // other, or one side being broken - both matter more than the total.
+                // Trades per day. One real trend a day means a healthy config should
+                // be in single digits - 72/day was the engine chasing noise.
+                var days = result.Trades.Select(t => t.EntryTimeUtc.Date).Distinct().Count();
+                var perDay = days > 0 ? result.Trades.Count / (double)days : 0;
+                Console.WriteLine($"     {perDay,6:F1} trades/day over {days} days");
+
                 var longs = result.Trades.Where(t => t.Direction == "LONG").ToList();
                 var shorts = result.Trades.Where(t => t.Direction == "SHORT").ToList();
                 Console.WriteLine(

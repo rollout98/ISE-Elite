@@ -56,18 +56,22 @@ namespace ISE.BacktestHarness.Engines
                         // 3 hold limits per combo to keep the sweep near 420 configs
                         foreach (var i in new[] { 0, 2, 4 }) // 50, 240, 1440 bars
                         {
-                            // Fixed target
-                            configs.Add(new BacktestConfiguration(
-                                configId++, contracts, risk, stop,
-                                liquidityCapacities[i], useTrailingStop: false));
-
-                            // Trailing stop. RiskMult is irrelevant here, so only emit
-                            // one trailing variant per (contracts, stop, hold) combo.
-                            if (Math.Abs(risk - riskMultipliers[0]) < 0.001)
+                            // Higher-timeframe gate: off, 1 hour, 4 hours.
+                            foreach (var filter in new[] { 0, 60, 240 })
                             {
+                                // Fixed target
                                 configs.Add(new BacktestConfiguration(
                                     configId++, contracts, risk, stop,
-                                    liquidityCapacities[i], useTrailingStop: true));
+                                    liquidityCapacities[i], false, filter));
+
+                                // Trailing. RiskMult is irrelevant here, so emit one
+                                // trailing variant per (contracts, stop, hold, filter).
+                                if (Math.Abs(risk - riskMultipliers[0]) < 0.001)
+                                {
+                                    configs.Add(new BacktestConfiguration(
+                                        configId++, contracts, risk, stop,
+                                        liquidityCapacities[i], true, filter));
+                                }
                             }
                         }
                     }
