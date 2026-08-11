@@ -14,8 +14,7 @@ namespace ISE.BacktestHarness.Engines
         private readonly decimal _accountSize;
         // Point values, not tick values. MNQ = $2/point ($0.50/tick @ 0.25 tick size).
         // $20/point is NQ, the full-size contract — using it overstates MNQ P&L by 10x.
-        private readonly decimal _mnqPointValue = 2m;
-        private readonly decimal _mgcPointValue = 10m;
+        private decimal _pointValue = 2m; // set per instrument in Initialize()
         // MNQ tick = 0.25 pt = $0.50. One tick of slippage per side is realistic for a
         // liquid micro; $10/side (the previous value) implied 5 POINTS of slip per side
         // and was single-handedly responsible for the -409% result on 2026-08-11.
@@ -78,6 +77,10 @@ namespace ISE.BacktestHarness.Engines
             _activeContracts = 0;
             _recentBars.Clear();
             _barCount = 0;
+
+            // Detect instrument and set correct point value
+            var firstBar = bars.First();
+            _pointValue = InstrumentSpecs.GetPointValue(firstBar.Instrument);
 
             // Wire the sweep parameters to actual trade geometry. Previously only
             // MaximumContracts was read, so all 420 configurations produced identical
@@ -281,8 +284,6 @@ namespace ISE.BacktestHarness.Engines
         {
             if (_activeContracts == 0) return;
 
-            var pointValue = _activeInstrument == "MNQ" ? _mnqPointValue : _mgcPointValue;
-
             // Fill at the level that triggered the exit, not the bar close. The signal
             // fires on the bar's high/low, so filling at Close invents P&L that the
             // trade never had. Stop is tested first: if a bar spans both levels we
@@ -295,7 +296,7 @@ namespace ISE.BacktestHarness.Engines
             else
                 exitPrice = exitBar.Close; // time-based exit (hold cap or end of data)
 
-            var pnl = CalculatePnL(exitPrice, pointValue);
+            var pnl = CalculatePnL(exitPrice, _pointValue);
 
             // Guard against sign errors in the short-side mirror. A stop-out must lose
             // and a target hit must win, for BOTH directions. If this ever trips, the
