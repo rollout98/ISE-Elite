@@ -12,7 +12,8 @@ namespace ISE.BacktestHarness.Models
             double stopDistanceRisk,
             double liquidityCapacity,
             bool useTrailingStop = false,
-            int trendFilterBars = 0)
+            int trendFilterBars = 0,
+            double breakEvenMovePoints = 0)
         {
             ConfigId = configId;
             MaximumContracts = maximumContracts;
@@ -21,6 +22,7 @@ namespace ISE.BacktestHarness.Models
             LiquidityCapacity = liquidityCapacity;
             UseTrailingStop = useTrailingStop;
             TrendFilterBars = trendFilterBars;
+            BreakevenMovePoints = breakEvenMovePoints;
         }
 
         public int ConfigId { get; }
@@ -45,6 +47,12 @@ namespace ISE.BacktestHarness.Models
         /// </summary>
         public int TrendFilterBars { get; }
 
+        /// <summary>
+        /// Breakeven move in points. Once profit reaches this level, stop is moved to entry price.
+        /// 0 = disabled. Typical: 62.5 to 75 points (250-300 ticks on MNQ).
+        /// </summary>
+        public double BreakevenMovePoints { get; }
+
         public override string ToString()
         {
             return $"Config{ConfigId}: Contracts={MaximumContracts}, " +
@@ -54,7 +62,8 @@ namespace ISE.BacktestHarness.Models
                    (UseTrailingStop
                        ? $"Exit=TRAIL {StopDistanceRisk:F0}pt"
                        : $"Exit=FIXED {StopDistanceRisk * AdaptiveRiskMultiplier:F0}pt") +
-                   (TrendFilterBars > 0 ? $", Filter={TrendFilterBars}bar" : ", Filter=OFF");
+                   (TrendFilterBars > 0 ? $", Filter={TrendFilterBars}bar" : ", Filter=OFF") +
+                   (BreakevenMovePoints > 0 ? $", BE={BreakevenMovePoints:F1}pt" : "");
         }
     }
 }

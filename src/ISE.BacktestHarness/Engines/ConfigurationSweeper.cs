@@ -22,10 +22,10 @@ namespace ISE.BacktestHarness.Engines
 
             // StopDistanceRisk: stop distance in POINTS below entry (5 values).
             // Was documented as "ticks" but never consumed by the engine.
-            // Widened 2026-08-11. MNQ tick = 0.25pt, so 600 ticks = 150pt and
-            // 900 ticks = 225pt. The old ceiling (15pt stop x 6R = 90pt target)
-            // could not capture either of those runs.
-            var stopDistances = new[] { 2.0, 4.0, 6.0, 10.0, 15.0, 25.0 };
+            // Devon's live method: 350-tick stop = 87.5 points, move to BE at 250-300 ticks (62.5-75 pts).
+            // Sweep: realistic stops (60-90pt) with/without breakeven logic.
+            // Dropped tight stops (2-25pt) — they don't match your real trading.
+            var stopDistances = new[] { 60.0, 75.0, 87.5 };
 
             // AdaptiveRiskMultiplier: reward:risk ratio. Profit target = stop * this.
             // 0.5 = scalper (target smaller than stop, high win rate, small wins)
@@ -62,7 +62,19 @@ namespace ISE.BacktestHarness.Engines
                                 // Fixed target
                                 configs.Add(new BacktestConfiguration(
                                     configId++, contracts, risk, stop,
-                                    liquidityCapacities[i], false, filter));
+                                    liquidityCapacities[i], false, filter, 0));
+
+                                // With breakeven: once profit reaches 62.5 or 75 pts, stop moves to entry
+                                // (only for realistic stop sizes: 60+)
+                                if (stop >= 60)
+                                {
+                                    foreach (var beMove in new[] { 62.5, 75.0 })
+                                    {
+                                        configs.Add(new BacktestConfiguration(
+                                            configId++, contracts, risk, stop,
+                                            liquidityCapacities[i], false, filter, beMove));
+                                    }
+                                }
 
                                 // Trailing. RiskMult is irrelevant here, so emit one
                                 // trailing variant per (contracts, stop, hold, filter).
@@ -70,7 +82,7 @@ namespace ISE.BacktestHarness.Engines
                                 {
                                     configs.Add(new BacktestConfiguration(
                                         configId++, contracts, risk, stop,
-                                        liquidityCapacities[i], true, filter));
+                                        liquidityCapacities[i], true, filter, 0));
                                 }
                             }
                         }

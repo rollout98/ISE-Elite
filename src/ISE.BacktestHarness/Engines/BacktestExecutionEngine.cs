@@ -90,6 +90,8 @@ namespace ISE.BacktestHarness.Engines
             _maxHoldBars = (int)config.LiquidityCapacity;
             _useTrailingStop = config.UseTrailingStop;
             _trendFilterBars = config.TrendFilterBars;
+            _breakEvenMovePoints = config.BreakevenMovePoints;
+            _breakEvenActivated = false;
 
             var orderedBars = bars.OrderBy(b => b.TimestampUtc).ToList();
 
@@ -227,12 +229,29 @@ namespace ISE.BacktestHarness.Engines
 
         // Single source of truth for trade geometry. Both GenerateSignal and
         // ClosePosition read these, so long and short cannot drift out of sync.
-        // In trailing mode the stop follows the best price reached and never retreats;
-        // in fixed mode it stays anchored to the entry.
+        // Breakeven mode: once profit reaches breakEvenMovePoints, stop moves to entry price.
+        // Otherwise: in trailing mode the stop follows best price; in fixed mode it's anchored to entry.
         private decimal StopLevel
         {
             get
             {
+                // Check if we should activate breakeven
+                if (_breakEvenMovePoints > 0 && !_breakEvenActivated)
+                {
+                    var unrealizedProfit = (_activeDirection == "LONG")
+                        ? (_bestPrice - _entryPrice) * _pointValue
+                        : (_entryPrice - _bestPrice) * _pointValue;
+                    
+                    if (unrealizedProfit >= (decimal)_breakEvenMovePoints * _pointValue)
+                    {
+                        _breakEvenActivated = true; // Profit reached threshold, lock in BE
+                    }
+                }
+
+                // Once breakeven is activated, stop is at entry; otherwise use normal logic
+                if (_breakEvenActivated)
+                    return _entryPrice;
+
                 var anchor = _useTrailingStop ? _bestPrice : _entryPrice;
                 return _activeDirection == "LONG" ? anchor - _stopPoints : anchor + _stopPoints;
             }
@@ -275,6 +294,7 @@ namespace ISE.BacktestHarness.Engines
             _entryTimeUtc = entryBar.TimestampUtc.UtcDateTime;
             _barsHeld = 0;
             _bestPrice = entryBar.Close;
+            _breakEvenActivated = false;
 
             _currentEquity -= (_slippagePerContract + _commissionPerContract) * _activeContracts;
             UpdateDrawdown();
