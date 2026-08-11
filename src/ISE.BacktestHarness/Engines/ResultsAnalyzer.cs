@@ -26,7 +26,7 @@ namespace ISE.BacktestHarness.Engines
             using (var writer = new StreamWriter(outputPath, false, Encoding.UTF8))
             {
                 // Header
-                writer.WriteLine("Rank,ConfigId,MaxContracts,RiskMult,StopDist,Liquidity," +
+                writer.WriteLine("Rank,ConfigId,MaxContracts,RiskMult,StopDist,MaxHoldBars,ExitMode," +
                                 "GrossProfit,ReturnPct,TotalTrades,WinRate,WinTrades,LossTrades," +
                                 "AvgPnL,LargestWin,LargestLoss,MaxDD,ProfitFactor,Sharpe,Score");
 
@@ -41,6 +41,7 @@ namespace ISE.BacktestHarness.Engines
                         $"{result.Config.AdaptiveRiskMultiplier:F2}," +
                         $"{result.Config.StopDistanceRisk:F2}," +
                         $"{result.Config.LiquidityCapacity:F0}," +
+                        $"{(result.Config.UseTrailingStop ? "TRAIL" : "FIXED")}," +
                         $"{result.GrossProfit:F2}," +
                         $"{result.ReturnPercent:F2}," +
                         $"{result.TotalTrades}," +

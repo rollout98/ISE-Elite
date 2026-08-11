@@ -34,6 +34,8 @@ namespace ISE.BacktestHarness.Engines
         private decimal _stopPoints = 1m;
         private decimal _targetPoints = 1m;
         private int _maxHoldBars = 50;
+        private bool _useTrailingStop = false;
+        private decimal _bestPrice = 0m; // best price reached in the trade's favour
         private int _barCount = 0;
 
         // Recent price history
@@ -78,6 +80,7 @@ namespace ISE.BacktestHarness.Engines
             _stopPoints = (decimal)config.StopDistanceRisk;
             _targetPoints = _stopPoints * (decimal)config.AdaptiveRiskMultiplier;
             _maxHoldBars = (int)config.LiquidityCapacity;
+            _useTrailingStop = config.UseTrailingStop;
 
             var orderedBars = bars.OrderBy(b => b.TimestampUtc).ToList();
 
@@ -111,6 +114,13 @@ namespace ISE.BacktestHarness.Engines
                 else if (signal == "EXIT" && _activeContracts > 0)
                 {
                     ClosePosition(bar);
+                }
+                else if (_activeContracts > 0)
+                {
+                    // Survived this bar - now let the trail advance on the favourable
+                    // extreme. Order matters: testing the stop first prevents a bar
+                    // from extending the trail and then being saved by that extension.
+                    UpdateTrail(bar);
                 }
             }
 
@@ -157,9 +167,18 @@ namespace ISE.BacktestHarness.Engines
 
         // Single source of truth for trade geometry. Both GenerateSignal and
         // ClosePosition read these, so long and short cannot drift out of sync.
-        private decimal StopLevel =>
-            _activeDirection == "LONG" ? _entryPrice - _stopPoints : _entryPrice + _stopPoints;
+        // In trailing mode the stop follows the best price reached and never retreats;
+        // in fixed mode it stays anchored to the entry.
+        private decimal StopLevel
+        {
+            get
+            {
+                var anchor = _useTrailingStop ? _bestPrice : _entryPrice;
+                return _activeDirection == "LONG" ? anchor - _stopPoints : anchor + _stopPoints;
+            }
+        }
 
+        // Trailing mode has no fixed target - the run ends when the trail is hit.
         private decimal TargetLevel =>
             _activeDirection == "LONG" ? _entryPrice + _targetPoints : _entryPrice - _targetPoints;
 
@@ -167,7 +186,23 @@ namespace ISE.BacktestHarness.Engines
             _activeDirection == "LONG" ? bar.Low <= StopLevel : bar.High >= StopLevel;
 
         private bool TargetTouched(HistoricalBar bar) =>
-            _activeDirection == "LONG" ? bar.High >= TargetLevel : bar.Low <= TargetLevel;
+            !_useTrailingStop &&
+            (_activeDirection == "LONG" ? bar.High >= TargetLevel : bar.Low <= TargetLevel);
+
+        // Advance the trail on favourable movement. Called AFTER the stop test for the
+        // current bar, so a bar cannot both extend the trail and be saved by it.
+        private void UpdateTrail(HistoricalBar bar)
+        {
+            if (!_useTrailingStop) return;
+            if (_activeDirection == "LONG")
+            {
+                if (bar.High > _bestPrice) _bestPrice = bar.High;
+            }
+            else
+            {
+                if (bar.Low < _bestPrice) _bestPrice = bar.Low;
+            }
+        }
 
         private void OpenPosition(HistoricalBar entryBar, string direction, int maxContracts)
         {
@@ -179,6 +214,7 @@ namespace ISE.BacktestHarness.Engines
             _entryPrice = entryBar.Close;
             _entryTimeUtc = entryBar.TimestampUtc.UtcDateTime;
             _barsHeld = 0;
+            _bestPrice = entryBar.Close;
 
             _currentEquity -= (_slippagePerContract + _commissionPerContract) * _activeContracts;
             UpdateDrawdown();
@@ -208,11 +244,14 @@ namespace ISE.BacktestHarness.Engines
             // and a target hit must win, for BOTH directions. If this ever trips, the
             // geometry is inverted and every P&L figure downstream is fiction - fail
             // loudly rather than report an attractive fake number.
-            if (StopTouched(exitBar) && pnl > 0m)
+            // Trailing mode is exempt: a trailed stop-out SHOULD be able to profit,
+            // since the trail locks in gains above the entry. Fixed mode has no such
+            // excuse - a stop below entry that books a profit means inverted signs.
+            if (!_useTrailingStop && StopTouched(exitBar) && pnl > 0m)
                 throw new InvalidOperationException(
                     $"Stop-out produced a PROFIT ({_activeDirection}, entry {_entryPrice}, " +
                     $"exit {exitPrice}, pnl {pnl}). Trade geometry is inverted.");
-            if (!StopTouched(exitBar) && TargetTouched(exitBar) && pnl < 0m)
+            if (!_useTrailingStop && !StopTouched(exitBar) && TargetTouched(exitBar) && pnl < 0m)
                 throw new InvalidOperationException(
                     $"Target hit produced a LOSS ({_activeDirection}, entry {_entryPrice}, " +
                     $"exit {exitPrice}, pnl {pnl}). Trade geometry is inverted.");

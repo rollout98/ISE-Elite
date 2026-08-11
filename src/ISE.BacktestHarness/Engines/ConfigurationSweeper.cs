@@ -22,12 +22,17 @@ namespace ISE.BacktestHarness.Engines
 
             // StopDistanceRisk: stop distance in POINTS below entry (5 values).
             // Was documented as "ticks" but never consumed by the engine.
-            var stopDistances = new[] { 2.0, 4.0, 6.0, 10.0, 15.0 };
+            // Widened 2026-08-11. MNQ tick = 0.25pt, so 600 ticks = 150pt and
+            // 900 ticks = 225pt. The old ceiling (15pt stop x 6R = 90pt target)
+            // could not capture either of those runs.
+            var stopDistances = new[] { 2.0, 4.0, 6.0, 10.0, 15.0, 25.0 };
 
             // AdaptiveRiskMultiplier: reward:risk ratio. Profit target = stop * this.
             // 0.5 = scalper (target smaller than stop, high win rate, small wins)
             // 3.0 = trend rider (target far beyond stop, low win rate, large wins)
-            var riskMultipliers = new[] { 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0 };
+            // 25pt stop x 10R = 250pt target = 1000 ticks, enough for the largest
+            // runs observed in the data. Ignored entirely in trailing mode.
+            var riskMultipliers = new[] { 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 10.0 };
 
             // LiquidityCapacity: repurposed as MAX HOLD in BARS (minutes on 1-min data).
             // Was never consumed by the engine, which is why every config appeared three
@@ -51,12 +56,19 @@ namespace ISE.BacktestHarness.Engines
                         // 3 hold limits per combo to keep the sweep near 420 configs
                         foreach (var i in new[] { 0, 2, 4 }) // 50, 240, 1440 bars
                         {
+                            // Fixed target
                             configs.Add(new BacktestConfiguration(
-                                configId++,
-                                contracts,
-                                risk,
-                                stop,
-                                liquidityCapacities[i]));
+                                configId++, contracts, risk, stop,
+                                liquidityCapacities[i], useTrailingStop: false));
+
+                            // Trailing stop. RiskMult is irrelevant here, so only emit
+                            // one trailing variant per (contracts, stop, hold) combo.
+                            if (Math.Abs(risk - riskMultipliers[0]) < 0.001)
+                            {
+                                configs.Add(new BacktestConfiguration(
+                                    configId++, contracts, risk, stop,
+                                    liquidityCapacities[i], useTrailingStop: true));
+                            }
                         }
                     }
                 }
