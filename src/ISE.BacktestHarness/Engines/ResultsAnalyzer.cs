@@ -100,6 +100,20 @@ namespace ISE.BacktestHarness.Engines
             foreach (var result in sorted)
             {
                 Console.WriteLine($"#{rank}: {result}");
+
+                // Long/short split. A blended figure can hide one side carrying the
+                // other, or one side being broken - both matter more than the total.
+                var longs = result.Trades.Where(t => t.Direction == "LONG").ToList();
+                var shorts = result.Trades.Where(t => t.Direction == "SHORT").ToList();
+                Console.WriteLine(
+                    $"     LONG  {longs.Count,5} trades | " +
+                    $"{(longs.Count > 0 ? longs.Count(t => t.IsWin) * 100.0 / longs.Count : 0),5:F1}% win | " +
+                    $"${longs.Sum(t => t.PnL - t.Slippage),12:F2}");
+                Console.WriteLine(
+                    $"     SHORT {shorts.Count,5} trades | " +
+                    $"{(shorts.Count > 0 ? shorts.Count(t => t.IsWin) * 100.0 / shorts.Count : 0),5:F1}% win | " +
+                    $"${shorts.Sum(t => t.PnL - t.Slippage),12:F2}");
+
                 rank++;
             }
             Console.WriteLine();

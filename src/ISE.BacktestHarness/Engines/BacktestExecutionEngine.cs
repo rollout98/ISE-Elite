@@ -104,6 +104,10 @@ namespace ISE.BacktestHarness.Engines
                 {
                     OpenPosition(bar, "LONG", config.MaximumContracts);
                 }
+                else if (signal == "SELL" && _activeContracts == 0)
+                {
+                    OpenPosition(bar, "SHORT", config.MaximumContracts);
+                }
                 else if (signal == "EXIT" && _activeContracts > 0)
                 {
                     ClosePosition(bar);
@@ -128,35 +132,42 @@ namespace ISE.BacktestHarness.Engines
 
         private string GenerateSignal(HistoricalBar currentBar)
         {
-            // Exit logic - FIRST (profit/stop)
+            // Exit first: stop before target, so a bar spanning both is booked as a loss.
             if (_activeContracts > 0)
             {
-                // Stop checked against the bar LOW, target against the bar HIGH, so an
-                // intrabar stop-out is not masked by a favourable close. Stop is checked
-                // first: if a bar spans both levels, assume the loss.
-                if (_activeDirection == "LONG" && currentBar.Low <= _entryPrice - _stopPoints)
-                    return "EXIT";
-                if (_activeDirection == "LONG" && currentBar.High >= _entryPrice + _targetPoints)
-                    return "EXIT";
+                if (StopTouched(currentBar)) return "EXIT";
+                if (TargetTouched(currentBar)) return "EXIT";
             }
 
-            // Entry logic: Trend Following (validated signal from SignalTester)
-            // 5-bar average > 10-bar average (uptrend) + price above 5-bar (confirmation)
+            // Entry: symmetric trend filter. The long-only version could not participate
+            // in downtrends at all - roughly half of every trend in the data was
+            // structurally untradeable before 2026-08-11.
             if (_activeContracts == 0 && _recentBars.Count >= 10)
             {
                 var closes = _recentBars.Select(b => b.Close).ToList();
                 var avg5 = closes.Skip(Math.Max(0, closes.Count - 5)).Average();
                 var avg10 = closes.Skip(Math.Max(0, closes.Count - 10)).Average();
-                
-                // Uptrend confirmation
-                if (avg5 > avg10 && currentBar.Close > avg5)
-                {
-                    return "BUY";
-                }
+
+                if (avg5 > avg10 && currentBar.Close > avg5) return "BUY";
+                if (avg5 < avg10 && currentBar.Close < avg5) return "SELL";
             }
 
             return "NONE";
         }
+
+        // Single source of truth for trade geometry. Both GenerateSignal and
+        // ClosePosition read these, so long and short cannot drift out of sync.
+        private decimal StopLevel =>
+            _activeDirection == "LONG" ? _entryPrice - _stopPoints : _entryPrice + _stopPoints;
+
+        private decimal TargetLevel =>
+            _activeDirection == "LONG" ? _entryPrice + _targetPoints : _entryPrice - _targetPoints;
+
+        private bool StopTouched(HistoricalBar bar) =>
+            _activeDirection == "LONG" ? bar.Low <= StopLevel : bar.High >= StopLevel;
+
+        private bool TargetTouched(HistoricalBar bar) =>
+            _activeDirection == "LONG" ? bar.High >= TargetLevel : bar.Low <= TargetLevel;
 
         private void OpenPosition(HistoricalBar entryBar, string direction, int maxContracts)
         {
@@ -183,18 +194,29 @@ namespace ISE.BacktestHarness.Engines
             // fires on the bar's high/low, so filling at Close invents P&L that the
             // trade never had. Stop is tested first: if a bar spans both levels we
             // assume the adverse fill rather than the favourable one.
-            var stopLevel = _entryPrice - _stopPoints;
-            var targetLevel = _entryPrice + _targetPoints;
-
             decimal exitPrice;
-            if (_activeDirection == "LONG" && exitBar.Low <= stopLevel)
-                exitPrice = stopLevel;
-            else if (_activeDirection == "LONG" && exitBar.High >= targetLevel)
-                exitPrice = targetLevel;
+            if (StopTouched(exitBar))
+                exitPrice = StopLevel;
+            else if (TargetTouched(exitBar))
+                exitPrice = TargetLevel;
             else
-                exitPrice = exitBar.Close; // time-based exit (50-bar cap or end of data)
+                exitPrice = exitBar.Close; // time-based exit (hold cap or end of data)
 
             var pnl = CalculatePnL(exitPrice, pointValue);
+
+            // Guard against sign errors in the short-side mirror. A stop-out must lose
+            // and a target hit must win, for BOTH directions. If this ever trips, the
+            // geometry is inverted and every P&L figure downstream is fiction - fail
+            // loudly rather than report an attractive fake number.
+            if (StopTouched(exitBar) && pnl > 0m)
+                throw new InvalidOperationException(
+                    $"Stop-out produced a PROFIT ({_activeDirection}, entry {_entryPrice}, " +
+                    $"exit {exitPrice}, pnl {pnl}). Trade geometry is inverted.");
+            if (!StopTouched(exitBar) && TargetTouched(exitBar) && pnl < 0m)
+                throw new InvalidOperationException(
+                    $"Target hit produced a LOSS ({_activeDirection}, entry {_entryPrice}, " +
+                    $"exit {exitPrice}, pnl {pnl}). Trade geometry is inverted.");
+
             var slippage = (_slippagePerContract + _commissionPerContract) * _activeContracts;
 
             var trade = new BacktestTrade(
