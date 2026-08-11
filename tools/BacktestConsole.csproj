@@ -10,7 +10,15 @@
     <RootNamespace>ISE.BacktestTools</RootNamespace>
     <StartupObject>ISE.BacktestTools.Program</StartupObject>
     <DefaultItemExcludes>$(DefaultItemExcludes);ISE.HistoricalResearch.DatasetValidator/**</DefaultItemExcludes>
+    <!-- tools/ holds several standalone testers; SDK-style globbing would pull them all
+         into this project. They reference ISE.Systems, which is not referenced here.
+         Compile only this console's own source. -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="BacktestConsole.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../src/ISE.BacktestHarness/ISE.BacktestHarness.csproj" />
