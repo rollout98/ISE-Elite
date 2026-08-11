@@ -63,7 +63,7 @@ namespace ISE.BacktestTools
                 Console.WriteLine($"   Trading days: {bars.Select(b => b.TradingDay).Distinct().Count()}\n");
 
                 // Step 1b: Load external signals (optional)
-                IReadOnlyList<VectorFlowSignalLoader.SignalRecord> signals = null;
+                IReadOnlyList<VectorFlowSignalLoader.SignalRecord>? signals = null;
                 var signalCsvPath = Environment.GetEnvironmentVariable("ISE_SIGNALS");
                 if (string.IsNullOrWhiteSpace(signalCsvPath))
                     signalCsvPath = Environment.GetEnvironmentVariable("ISE_SIGNALS_MNQ");
@@ -131,7 +131,7 @@ namespace ISE.BacktestTools
             if (string.IsNullOrWhiteSpace(path))
                 path = Environment.GetEnvironmentVariable("ISE_DATASET");
 
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            if (string.IsNullOrWhiteSpace(path) || path == null || !File.Exists(path))
             {
                 Console.WriteLine($"   ⚠️  No dataset found for {instrument}");
                 Console.WriteLine($"   Set ISE_DATASET_{instrument} to the .tsv path, or place the file in");
