@@ -43,13 +43,15 @@ namespace ISE.BacktestHarness
                 
                 var headers = headerLine.Split(delimiter);
                 int timeIdx = Array.IndexOf(headers, "time");
-                int buyIdx = Array.IndexOf(headers, "BUY");
-                int sellIdx = Array.IndexOf(headers, "SELL");
+                int buyIdx = Array.IndexOf(headers, "Buy Signal");
+                if (buyIdx < 0) buyIdx = Array.IndexOf(headers, "BUY");  // fallback
+                int sellIdx = Array.IndexOf(headers, "Sell Signal");
+                if (sellIdx < 0) sellIdx = Array.IndexOf(headers, "SELL");  // fallback
 
                 if (timeIdx < 0 || (buyIdx < 0 && sellIdx < 0))
                 {
                     throw new InvalidOperationException(
-                        $"CSV missing required columns. Expected: time, BUY, SELL. " +
+                        $"CSV missing required columns. Expected: time, (Buy Signal or BUY), (Sell Signal or SELL). " +
                         $"Found: {string.Join(", ", headers)}");
                 }
 
