@@ -33,6 +33,7 @@ namespace ISE.BacktestHarness.Engines
         // Exit geometry for the active trade, set from BacktestConfiguration at entry.
         private decimal _stopPoints = 1m;
         private decimal _targetPoints = 1m;
+        private int _maxHoldBars = 50;
         private int _barCount = 0;
 
         // Recent price history
@@ -76,6 +77,7 @@ namespace ISE.BacktestHarness.Engines
             // results and the sweep tested nothing.
             _stopPoints = (decimal)config.StopDistanceRisk;
             _targetPoints = _stopPoints * (decimal)config.AdaptiveRiskMultiplier;
+            _maxHoldBars = (int)config.LiquidityCapacity;
 
             var orderedBars = bars.OrderBy(b => b.TimestampUtc).ToList();
 
@@ -89,7 +91,7 @@ namespace ISE.BacktestHarness.Engines
                 if (_activeContracts > 0)
                 {
                     _barsHeld++;
-                    if (_barsHeld > 50)
+                    if (_barsHeld > _maxHoldBars)
                     {
                         ClosePosition(bar);
                         continue;

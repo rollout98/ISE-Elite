@@ -30,7 +30,7 @@ namespace ISE.BacktestHarness.Models
             return $"Config{ConfigId}: Contracts={MaximumContracts}, " +
                    $"RiskMult={AdaptiveRiskMultiplier:F2}, " +
                    $"StopDist={StopDistanceRisk:F2}, " +
-                   $"Liquidity={LiquidityCapacity:F0}%";
+                   $"MaxHold={LiquidityCapacity:F0}bars";
         }
     }
 }

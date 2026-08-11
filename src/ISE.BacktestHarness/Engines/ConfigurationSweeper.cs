@@ -29,8 +29,16 @@ namespace ISE.BacktestHarness.Engines
             // 3.0 = trend rider (target far beyond stop, low win rate, large wins)
             var riskMultipliers = new[] { 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0 };
 
-            // LiquidityCapacity: 50%-150% in 25% steps (5 values)
-            var liquidityCapacities = new[] { 50.0, 75.0, 100.0, 125.0, 150.0 };
+            // LiquidityCapacity: repurposed as MAX HOLD in BARS (minutes on 1-min data).
+            // Was never consumed by the engine, which is why every config appeared three
+            // times with identical results. The engine's old hard-coded 50-bar cap made
+            // trend configs impossible: a 60pt target rarely completes in 50 minutes, so
+            // trades were force-closed mid-move.
+            //   50   = ~1hr   (scalp)
+            //   240  = 4hrs   (session swing)
+            //   480  = 8hrs   (hold London into NY)
+            //   1440 = 24hrs  (hold until trend actually ends)
+            var liquidityCapacities = new[] { 50.0, 120.0, 240.0, 480.0, 1440.0 };
 
             // Generate cartesian product: 4 * 7 * 5 * 5 = 700 configs (too many)
             // Instead: sample systematically
@@ -40,8 +48,8 @@ namespace ISE.BacktestHarness.Engines
                 {
                     foreach (var stop in stopDistances)
                     {
-                        // Take only 3 liquidity values per combo to reduce to ~420
-                        foreach (var i in new[] { 0, 2, 4 }) // 50%, 100%, 150%
+                        // 3 hold limits per combo to keep the sweep near 420 configs
+                        foreach (var i in new[] { 0, 2, 4 }) // 50, 240, 1440 bars
                         {
                             configs.Add(new BacktestConfiguration(
                                 configId++,
