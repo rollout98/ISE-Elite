@@ -13,8 +13,10 @@ namespace ISE.BacktestHarness.Engines
     public sealed class BacktestEngine
     {
         private readonly decimal _accountSize;
-        private const decimal MNQ_TICK_VALUE = 20m; // $20 per tick
-        private const decimal MGC_TICK_VALUE = 10m; // $10 per tick
+        // Point values, not tick values. MNQ = $2/point ($0.50/tick @ 0.25 tick size).
+        // $20/point is NQ, the full-size contract — using it overstates MNQ P&L by 10x.
+        private const decimal MNQ_POINT_VALUE = 2m;  // MNQ: $2 per index point
+        private const decimal MGC_POINT_VALUE = 10m; // MGC: $10 per $1 move (10 oz)
 
         public BacktestEngine(decimal accountSize = 50000m)
         {

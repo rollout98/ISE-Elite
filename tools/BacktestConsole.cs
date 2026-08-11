@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using ISE.BacktestHarness;
 using ISE.HistoricalResearch;
@@ -109,95 +110,57 @@ namespace ISE.BacktestTools
         }
 
         /// <summary>
-        /// Load 6 months of MNQ/MGC historical data from NinjaTrader
-        /// Filter to NY session hours (9:30-16:00 CT)
+        /// Load real MNQ historical bars from the probe-exported dataset.
+        /// No session filter: full 24h is retained so Asia/London hours are analyzable.
         /// </summary>
         private static List<HistoricalBar> LoadHistoricalBars()
         {
-            var allBars = new List<HistoricalBar>();
-            var startDate = new DateTime(2024, 3, 1);
-            var endDate = new DateTime(2024, 9, 1);
+            // Reads the real MNQ dataset written by ISEEliteNewYorkMultiMonthDatasetProbe
+            // (NinjaTrader indicator) in HistoricalDataFileStore's tab-delimited schema.
+            //
+            // Override the path with the ISE_DATASET environment variable:
+            //   $env:ISE_DATASET = "C:\path\to\dataset.tsv"
+            //
+            // NOTE: the previous implementation fell through to GenerateMockBars(), a
+            // random walk. Random data contains no trends by construction, so every
+            // result produced before 2026-08-11 was an artifact, not a finding.
 
-            try
+            var path = Environment.GetEnvironmentVariable("ISE_DATASET");
+
+            if (string.IsNullOrWhiteSpace(path))
             {
-                // ====================================================================
-                // NOTE: This is a TEMPLATE implementation.
-                // Replace the probe instantiation with your actual NT8 connection.
-                // ====================================================================
-                
-                // Uncomment and modify this section with your actual probe implementation:
-                /*
-                var probe = new ISEEliteHistoricalBarsRequestProbe();
-                
-                Console.WriteLine("   Loading MNQ 1-minute bars...");
-                var mnq1min = probe.RequestBars(
-                    instrument: "MNQ",
-                    startDate: startDate,
-                    endDate: endDate,
-                    intervalSeconds: 60);
-                allBars.AddRange(mnq1min ?? new List<HistoricalBar>());
-                Console.WriteLine($"     ✓ {mnq1min?.Count ?? 0:N0} bars loaded");
+                var researchDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                    "NinjaTrader 8", "ISEEliteResearch");
 
-                Console.WriteLine("   Loading MNQ 5-minute bars...");
-                var mnq5min = probe.RequestBars(
-                    instrument: "MNQ",
-                    startDate: startDate,
-                    endDate: endDate,
-                    intervalSeconds: 300);
-                allBars.AddRange(mnq5min ?? new List<HistoricalBar>());
-                Console.WriteLine($"     ✓ {mnq5min?.Count ?? 0:N0} bars loaded");
-
-                Console.WriteLine("   Loading MGC 1-minute bars...");
-                var mgc1min = probe.RequestBars(
-                    instrument: "MGC",
-                    startDate: startDate,
-                    endDate: endDate,
-                    intervalSeconds: 60);
-                allBars.AddRange(mgc1min ?? new List<HistoricalBar>());
-                Console.WriteLine($"     ✓ {mgc1min?.Count ?? 0:N0} bars loaded");
-
-                Console.WriteLine("   Loading MGC 5-minute bars...");
-                var mgc5min = probe.RequestBars(
-                    instrument: "MGC",
-                    startDate: startDate,
-                    endDate: endDate,
-                    intervalSeconds: 300);
-                allBars.AddRange(mgc5min ?? new List<HistoricalBar>());
-                Console.WriteLine($"     ✓ {mgc5min?.Count ?? 0:N0} bars loaded");
-
-                if (allBars.Count == 0)
+                if (Directory.Exists(researchDir))
                 {
-                    Console.WriteLine("\n⚠️  No bars returned from probe.");
-                    Console.WriteLine("   Verify:");
-                    Console.WriteLine("   • ISEEliteHistoricalBarsRequestProbe is accessible");
-                    Console.WriteLine("   • NinjaTrader has data for MNQ/MGC for 2024-03-01 to 2024-09-01");
-                    Console.WriteLine("   • Network connection to NT8 host is working");
-                    return new List<HistoricalBar>();
+                    // Newest dataset wins when several exports are present.
+                    path = Directory.GetFiles(researchDir, "*.tsv")
+                        .OrderByDescending(f => new FileInfo(f).LastWriteTimeUtc)
+                        .FirstOrDefault();
                 }
-
-                Console.WriteLine("\n   Filtering to NY session (9:30-16:00 CT)...");
-                var extractor = new NewYorkSessionDatasetExtractor();
-                var nyBars = extractor.FilterToNySession(allBars);
-                Console.WriteLine($"     ✓ {nyBars.Count:N0} bars in NY session");
-
-                return nyBars;
-                */
-
-                // ====================================================================
-                // FALLBACK: Generate mock data for testing (remove when NT8 ready)
-                // ====================================================================
-                Console.WriteLine("   ⚠️  Using mock data (NT8 probe not yet integrated)");
-                Console.WriteLine("      Replace this section with actual probe implementation");
-                
-                var mockBars = GenerateMockBars(5000); // 5000 1-minute bars ~ 3-4 weeks
-                Console.WriteLine($"     ✓ Generated {mockBars.Count:N0} mock bars for testing");
-                return mockBars;
             }
-            catch (Exception ex)
+
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
-                Console.WriteLine($"\n❌ ERROR loading bars: {ex.Message}");
-                throw;
+                Console.WriteLine("   No dataset found.");
+                Console.WriteLine("   Run ISEEliteNewYorkMultiMonthDatasetProbe on an MNQ chart in");
+                Console.WriteLine("   NinjaTrader, then set ISE_DATASET to the .tsv it prints.");
+                return new List<HistoricalBar>();
             }
+
+            Console.WriteLine($"   Dataset: {path}");
+            var bars = new HistoricalDataFileStore().Read(path).ToList();
+
+            if (bars.Count > 0)
+            {
+                Console.WriteLine($"   Bars:    {bars.Count:N0}");
+                Console.WriteLine($"   Range:   {bars[0].TimestampUtc:yyyy-MM-dd} to {bars[bars.Count - 1].TimestampUtc:yyyy-MM-dd}");
+                Console.WriteLine($"   Source:  {bars[0].SourceName}");
+            }
+
+            return bars;
         }
 
         /// <summary>

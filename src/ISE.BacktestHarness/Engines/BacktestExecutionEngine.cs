@@ -12,8 +12,10 @@ namespace ISE.BacktestHarness.Engines
     public sealed class BacktestExecutionEngine
     {
         private readonly decimal _accountSize;
-        private readonly decimal _mnqTickValue = 20m;
-        private readonly decimal _mgcTickValue = 10m;
+        // Point values, not tick values. MNQ = $2/point ($0.50/tick @ 0.25 tick size).
+        // $20/point is NQ, the full-size contract — using it overstates MNQ P&L by 10x.
+        private readonly decimal _mnqPointValue = 2m;
+        private readonly decimal _mgcPointValue = 10m;
         private readonly decimal _slippagePerContract = 10m;
 
         // Position tracking
@@ -156,8 +158,8 @@ namespace ISE.BacktestHarness.Engines
         {
             if (_activeContracts == 0) return;
 
-            var tickValue = _activeInstrument == "MNQ" ? _mnqTickValue : _mgcTickValue;
-            var pnl = CalculatePnL(exitBar.Close, tickValue);
+            var pointValue = _activeInstrument == "MNQ" ? _mnqPointValue : _mgcPointValue;
+            var pnl = CalculatePnL(exitBar.Close, pointValue);
             var slippage = _slippagePerContract * _activeContracts;
 
             var trade = new BacktestTrade(
@@ -181,13 +183,13 @@ namespace ISE.BacktestHarness.Engines
             _barsHeld = 0;
         }
 
-        private decimal CalculatePnL(decimal exitPrice, decimal tickValue)
+        private decimal CalculatePnL(decimal exitPrice, decimal pointValue)
         {
             var priceChange = _activeDirection == "LONG"
                 ? exitPrice - _entryPrice
                 : _entryPrice - exitPrice;
 
-            return priceChange * tickValue * _activeContracts;
+            return priceChange * pointValue * _activeContracts;
         }
 
         private void UpdateDrawdown()
