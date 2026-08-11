@@ -36,44 +36,70 @@ namespace ISE.BacktestTools
 
             try
             {
-                // Step 1: Load historical bars from NT8
+                // Step 1: Load historical bars for MNQ and MGC
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                Console.WriteLine("STEP 1: Loading Historical Data from NinjaTrader");
+                Console.WriteLine("STEP 1: Loading Historical Data");
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-                var bars = LoadHistoricalBars();
-
-                if (bars == null || bars.Count == 0)
+                var barsByInstrument = new Dictionary<string, List<HistoricalBar>>();
+                foreach (var instrument in new[] { "MNQ", "MGC" })
                 {
-                    Console.WriteLine("❌ ERROR: No historical bars loaded.");
-                    Console.WriteLine("   Troubleshooting:");
-                    Console.WriteLine("   1. Verify NinjaTrader 8 is running");
-                    Console.WriteLine("   2. Check ISEEliteHistoricalBarsRequestProbe accessibility");
-                    Console.WriteLine("   3. Verify MNQ/MGC data exists for 2024-03-01 to 2024-09-01");
+                    var bars = LoadHistoricalBars(instrument);
+                    if (bars != null && bars.Count > 0)
+                        barsByInstrument[instrument] = bars;
+                }
+
+                if (barsByInstrument.Count == 0)
+                {
+                    Console.WriteLine("❌ ERROR: No historical bars loaded for MNQ or MGC.");
+                    Console.WriteLine("   Set ISE_DATASET_MNQ and/or ISE_DATASET_MGC environment variables.");
                     return;
                 }
 
-                var barsByInstrument = bars.GroupBy(b => b.Instrument).ToList();
-                Console.WriteLine($"✅ Loaded {bars.Count:N0} bars across {barsByInstrument.Count} instruments\n");
-
-                // Load external signals (e.g., VectorFlow from CSV)
-                IReadOnlyList<VectorFlowSignalLoader.SignalRecord> signals = null;
-                var signalCsvPath = Environment.GetEnvironmentVariable("ISE_SIGNALS");
-
-                if (!string.IsNullOrWhiteSpace(signalCsvPath))
+                Console.WriteLine($"✅ Loaded bars for {barsByInstrument.Count} instruments:\n");
+                foreach (var kvp in barsByInstrument)
                 {
-                    Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                    Console.WriteLine("Loading External Signals (VectorFlow CSV)");
-                    Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-                    try
+                    Console.WriteLine($"   {kvp.Key}: {kvp.Value.Count:N0} bars");
+                }
+                Console.WriteLine();
+
+                // Load external signals (e.g., VectorFlow from CSV) for each instrument
+                var signalsByInstrument = new Dictionary<string, IReadOnlyList<VectorFlowSignalLoader.SignalRecord>>();
+                foreach (var instrument in barsByInstrument.Keys)
+                {
+                    // Try per-instrument first (ISE_SIGNALS_MNQ), then fallback to generic (ISE_SIGNALS)
+                    var perInstrumentVar = $"ISE_SIGNALS_{instrument}";
+                    var signalCsvPath = Environment.GetEnvironmentVariable(perInstrumentVar);
+                    
+                    if (string.IsNullOrWhiteSpace(signalCsvPath))
                     {
-                        signals = VectorFlowSignalLoader.LoadFromCsv(signalCsvPath);
-                        Console.WriteLine();
+                        signalCsvPath = Environment.GetEnvironmentVariable("ISE_SIGNALS");
                     }
-                    catch (Exception ex)
+
+                    Console.WriteLine($"Checking for signals ({instrument}): {(string.IsNullOrWhiteSpace(signalCsvPath) ? "none" : signalCsvPath)}");
+
+                    if (!string.IsNullOrWhiteSpace(signalCsvPath))
                     {
-                        Console.WriteLine($"⚠️  WARNING: Could not load signal CSV: {ex.Message}");
-                        Console.WriteLine("   Proceeding with computed signals (5/10 MA crossover)\n");
+                        Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                        Console.WriteLine($"Loading External Signals ({instrument} - VectorFlow CSV)");
+                        Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+                        try
+                        {
+                            if (!System.IO.File.Exists(signalCsvPath))
+                            {
+                                Console.WriteLine($"❌ ERROR: Signal file not found: {signalCsvPath}\n");
+                            }
+                            else
+                            {
+                                signalsByInstrument[instrument] = VectorFlowSignalLoader.LoadFromCsv(signalCsvPath);
+                                Console.WriteLine();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"❌ ERROR: Could not load signal CSV: {ex.Message}");
+                            Console.WriteLine("   Proceeding with computed signals (5/10 MA crossover)\n");
+                        }
                     }
                 }
 
@@ -134,9 +160,10 @@ namespace ISE.BacktestTools
         /// Load real MNQ historical bars from the probe-exported dataset.
         /// No session filter: full 24h is retained so Asia/London hours are analyzable.
         /// </summary>
-        private static List<HistoricalBar> LoadHistoricalBars()
+        private static List<HistoricalBar> LoadHistoricalBars(string instrument = "MNQ")
         {
-            // Reads the real MNQ dataset written by ISEEliteNewYorkMultiMonthDatasetProbe
+            // Reads the real dataset written by ISEEliteNewYorkMultiMonthDatasetProbe
+            // Supports MNQ and MGC via ISE_DATASET_MNQ and ISE_DATASET_MGC env vars
             // (NinjaTrader indicator) in HistoricalDataFileStore's tab-delimited schema.
             //
             // Override the path with the ISE_DATASET environment variable:
@@ -146,7 +173,7 @@ namespace ISE.BacktestTools
             // random walk. Random data contains no trends by construction, so every
             // result produced before 2026-08-11 was an artifact, not a finding.
 
-            var path = Environment.GetEnvironmentVariable("ISE_DATASET");
+            var path = Environment.GetEnvironmentVariable($"ISE_DATASET_{instrument}");
 
             if (string.IsNullOrWhiteSpace(path))
             {
@@ -156,8 +183,8 @@ namespace ISE.BacktestTools
 
                 if (Directory.Exists(researchDir))
                 {
-                    // Newest dataset wins when several exports are present.
-                    path = Directory.GetFiles(researchDir, "*.tsv")
+                    // Auto-find: look for files matching the instrument
+                    path = Directory.GetFiles(researchDir, $"*{instrument}*.tsv")
                         .OrderByDescending(f => new FileInfo(f).LastWriteTimeUtc)
                         .FirstOrDefault();
                 }
@@ -165,13 +192,13 @@ namespace ISE.BacktestTools
 
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
-                Console.WriteLine("   No dataset found.");
-                Console.WriteLine("   Run ISEEliteNewYorkMultiMonthDatasetProbe on an MNQ chart in");
-                Console.WriteLine("   NinjaTrader, then set ISE_DATASET to the .tsv it prints.");
+                Console.WriteLine($"   ⚠️  No dataset found for {instrument}");
+                Console.WriteLine($"   Set ISE_DATASET_{instrument} to the .tsv path, or place the file in");
+                Console.WriteLine($"   Documents\NinjaTrader 8\ISEEliteResearch\ with '{instrument}' in its name.");
                 return new List<HistoricalBar>();
             }
 
-            Console.WriteLine($"   Dataset: {path}");
+            Console.WriteLine($"   {instrument} dataset: {Path.GetFileName(path)}");
             var bars = new HistoricalDataFileStore().Read(path).ToList();
 
             if (bars.Count > 0)

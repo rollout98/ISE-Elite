@@ -36,7 +36,12 @@ namespace ISE.BacktestHarness
                 if (headerLine == null)
                     throw new InvalidOperationException("CSV is empty");
 
-                var headers = headerLine.Split(',');
+                // Auto-detect delimiter: comma or tab
+                char delimiter = ',';
+                if (headerLine.Contains('	'))
+                    delimiter = '	';
+                
+                var headers = headerLine.Split(delimiter);
                 int timeIdx = Array.IndexOf(headers, "time");
                 int buyIdx = Array.IndexOf(headers, "BUY");
                 int sellIdx = Array.IndexOf(headers, "SELL");
@@ -56,7 +61,7 @@ namespace ISE.BacktestHarness
                     if (string.IsNullOrWhiteSpace(line))
                         continue;
 
-                    var fields = line.Split(',');
+                    var fields = line.Split(delimiter);
                     if (fields.Length <= Math.Max(buyIdx, sellIdx))
                         continue;
 
@@ -80,7 +85,7 @@ namespace ISE.BacktestHarness
             if (records.Count == 0)
                 throw new InvalidOperationException("No valid signal records found in CSV");
 
-            Console.WriteLine($"✅ Loaded {records.Count} signal records from {Path.GetFileName(csvPath)}");
+            Console.WriteLine($"✅ Loaded {records.Count} signal records from {Path.GetFileName(csvPath)} (delimiter: {(headerLine.Contains('	') ? 'TAB' : 'COMMA')})");
             Console.WriteLine($"   Range: {records[0].TimestampUtc:yyyy-MM-dd HH:mm:ss Z} to {records[records.Count - 1].TimestampUtc:yyyy-MM-dd HH:mm:ss Z}");
 
             var signalFireCount = records.Count(r => r.Signal != "NONE");
