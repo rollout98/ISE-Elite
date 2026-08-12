@@ -105,12 +105,20 @@ namespace ISE.BacktestHarness.Engines
         /// </summary>
         public void PrintTopResults(IEnumerable<BacktestResult> results, int topN = 10)
         {
-            var sorted = results
+            var allResults = results.ToList();
+            var sorted = allResults
                 .OrderByDescending(r => CalculateCompositeScore(r))
                 .Take(topN)
                 .ToList();
 
             Console.WriteLine($"\n========== TOP {topN} CONFIGURATIONS ==========\n");
+
+            // Exit-mode head-to-head, held at a fixed contract count so the comparison
+            // is not just "whichever mode happened to get swept at 10 contracts wins".
+            // Answers the only question that matters here: does holding to the reversal
+            // actually beat a fixed target on the same data?
+            PrintExitModeComparison(allResults, 3);
+
             int rank = 1;
             foreach (var result in sorted)
             {
@@ -159,5 +167,35 @@ namespace ISE.BacktestHarness.Engines
             }
             Console.WriteLine();
         }
+
+        /// <summary>
+        /// Best config per exit mode at one contract count. Sorting the whole sweep by
+        /// profit would just rank by position size, so size is pinned and only the exit
+        /// rule varies.
+        /// </summary>
+        private void PrintExitModeComparison(List<BacktestResult> results, int contractsToCompare)
+        {
+            var pool = results.Where(r => r.Config.MaximumContracts == contractsToCompare).ToList();
+            if (pool.Count == 0) return;
+
+            string ModeOf(BacktestResult r) =>
+                r.Config.HoldToReversal ? "REVERSAL"
+                : r.Config.UseTrailingStop ? "TRAIL"
+                : $"FIXED {r.Config.StopDistanceRisk * r.Config.AdaptiveRiskMultiplier:F0}pt";
+
+            Console.WriteLine($"===== EXIT MODE COMPARISON (best config per mode, {contractsToCompare} contracts) =====\n");
+            Console.WriteLine("  MODE                 GROSS   MED/DAY   AVG/DAY   WIN%  TRADES  >=500      MAXDD");
+
+            foreach (var g in pool.GroupBy(ModeOf)
+                                  .Select(g => g.OrderByDescending(r => r.GrossProfit).First())
+                                  .OrderByDescending(r => r.GrossProfit))
+            {
+                Console.WriteLine(
+                    $"  {ModeOf(g),-14} {g.GrossProfit,11:F0} {g.MedianDailyPnL,9:F0} {g.AvgDailyPnL,9:F0} " +
+                    $"{g.WinRate,6:F1} {g.TotalTrades,7} {g.PctDaysAbove(500m),5:F0}% {g.MaxDrawdown,10:F0}");
+            }
+            Console.WriteLine();
+        }
+
     }
 }

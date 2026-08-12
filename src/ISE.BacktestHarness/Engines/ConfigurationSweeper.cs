@@ -60,24 +60,33 @@ namespace ISE.BacktestHarness.Engines
             // anyway. Left as a single value until we decide whether to wire it up.
             var trendFilters = new[] { 0 };
 
-            // Hold-to-reversal only. There is no AdaptiveRiskMultiplier dimension here:
-            // that value exists solely to compute a fixed profit target, and this
-            // strategy has none. Sweeping it previously produced thousands of rows that
-            // differed only in a field the engine no longer reads.
+            // EXIT MODE COMPARISON. All three arms run on the same engine, the same
+            // bars and the same signals, so the comparison is genuinely like-for-like.
+            // Previously only the reversal arm was generated, which meant "reversal
+            // beats fixed" rested on a number produced by a different, buggier build.
+            //
+            // Arm 1: REVERSAL - hold until the opposing VectorFlow signal fires.
+            // Arm 2: FIXED    - profit target at stop * riskMultiplier. The prior live
+            //                   setup was an 87.5pt stop with a 44pt target (~0.5R),
+            //                   so the range brackets that.
+            // Arm 3: TRAIL    - stop follows the favourable extreme by StopDistance.
+            var riskMultipliers = new[] { 0.5, 1.0, 1.5, 2.0, 3.0 };
+
             foreach (var contracts in contractCounts)
             {
                 foreach (var stop in stopDistances)
                 {
-                    foreach (var floor in profitFloors)
+                    foreach (var hold in maxHolds)
                     {
-                        foreach (var hold in maxHolds)
+                        foreach (var filter in trendFilters)
                         {
-                            foreach (var filter in trendFilters)
+                            // Arm 1: hold to reversal
+                            foreach (var floor in profitFloors)
                             {
                                 configs.Add(new BacktestConfiguration(
                                     configId: configId++,
                                     maximumContracts: contracts,
-                                    adaptiveRiskMultiplier: 0,   // unused in reversal mode
+                                    adaptiveRiskMultiplier: 0,
                                     stopDistanceRisk: stop,
                                     liquidityCapacity: hold,
                                     useTrailingStop: false,
@@ -86,6 +95,35 @@ namespace ISE.BacktestHarness.Engines
                                     holdToReversal: true,
                                     profitFloorDollars: floor));
                             }
+
+                            // Arm 2: fixed profit target
+                            foreach (var risk in riskMultipliers)
+                            {
+                                configs.Add(new BacktestConfiguration(
+                                    configId: configId++,
+                                    maximumContracts: contracts,
+                                    adaptiveRiskMultiplier: risk,
+                                    stopDistanceRisk: stop,
+                                    liquidityCapacity: hold,
+                                    useTrailingStop: false,
+                                    trendFilterBars: filter,
+                                    breakEvenMovePoints: 0,
+                                    holdToReversal: false,
+                                    profitFloorDollars: 0m));
+                            }
+
+                            // Arm 3: trailing stop (riskMultiplier is unread here)
+                            configs.Add(new BacktestConfiguration(
+                                configId: configId++,
+                                maximumContracts: contracts,
+                                adaptiveRiskMultiplier: 0,
+                                stopDistanceRisk: stop,
+                                liquidityCapacity: hold,
+                                useTrailingStop: true,
+                                trendFilterBars: filter,
+                                breakEvenMovePoints: 0,
+                                holdToReversal: false,
+                                profitFloorDollars: 0m));
                         }
                     }
                 }
