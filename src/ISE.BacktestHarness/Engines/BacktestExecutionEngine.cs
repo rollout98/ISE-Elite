@@ -37,6 +37,8 @@ namespace ISE.BacktestHarness.Engines
         private Dictionary<DateTime, string> _externalSignals = new Dictionary<DateTime, string>();
         private int _trendFilterBars = 0; // 0 = disabled
         private decimal _bestPrice = 0m; // best price reached in the trade's favour
+        private double _breakEvenMovePoints = 0; // once profit reaches this, stop moves to entry
+        private bool _breakEvenActivated = false; // flag to prevent re-triggering
         private int _barCount = 0;
 
         // Recent price history
