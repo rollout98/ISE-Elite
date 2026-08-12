@@ -11,19 +11,33 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
 	public class ISEEliteVectorFlowLive : Strategy
 	{
+		// FTC + VIDYA parameters
+		private int ftcPeriod = 20;
+		private int atrPeriod = 14;
+		private int vidyaPeriod = 20;
+
+		// Entry parameters (locked from backtest)
 		private double stopLossPoints = 87.5;
 		private double profitTargetPoints = 44.0;
 		private double breakEvenMovePoints = 62.5;
 		private int contractSize = 4;
 
+		// State tracking
 		private bool breakEvenSet = false;
 		private double entryPrice = 0;
+		
+		// Previous alignment state (for edge detection)
+		private bool prevFtcVidyaLong = false;
+		private bool prevFtcVidyaShort = false;
+		
+		// VIDYA state (rolling calculation)
+		private double prevVidya = 0;
 
 		protected override void OnStateChange()
 		{
 			if (State == State.SetDefaults)
 			{
-				Description = "ISE Elite VectorFlow Live";
+				Description = "ISE Elite VectorFlow Live (Merged)";
 				Name = "ISEEliteVectorFlowLive";
 				Calculate = Calculate.OnBarClose;
 				EntriesPerDirection = 1;
@@ -31,19 +45,46 @@ namespace NinjaTrader.NinjaScript.Strategies
 				IsExitOnSessionCloseStrategy = false;
 				ExitOnSessionCloseSeconds = 300;
 				StopTargetHandling = StopTargetHandling.PerEntryExecution;
-				BarsRequiredToTrade = 0;
+				BarsRequiredToTrade = ftcPeriod + 1;
+			}
+			else if (State == State.Configure)
+			{
+				// Initialize VIDYA state
+				prevVidya = 0;
 			}
 		}
 
 		protected override void OnBarUpdate()
 		{
-			if (CurrentBar < 1)
+			if (CurrentBar < ftcPeriod)
 				return;
 
-			// Breakeven logic - move stop to entry once in profit
+			// ========== SIGNAL GENERATION ==========
+			// Calculate FTC (Fundamental Trend Channel): SMA ± ATR
+			double sma = SMA(Close, ftcPeriod)[0];
+			double atr = ATR(Close, atrPeriod)[0];
+			double ftcUpper = sma + atr;
+			double ftcLower = sma - atr;
+
+			// Calculate VIDYA (adaptive EMA based on momentum ratio)
+			double vidya = CalculateVIDYA();
+
+			// Detect alignment: FTC and VIDYA point same direction
+			bool ftcVidyaLongAlign = (vidya > sma) && (Close[0] > ftcLower);  // Both bullish
+			bool ftcVidyaShortAlign = (vidya < sma) && (Close[0] < ftcUpper);  // Both bearish
+
+			// Generate buy/sell on alignment edge (transition from no-alignment to alignment)
+			bool buySignal = ftcVidyaLongAlign && !prevFtcVidyaLong;
+			bool sellSignal = ftcVidyaShortAlign && !prevFtcVidyaShort;
+
+			// Update state for next bar
+			prevFtcVidyaLong = ftcVidyaLongAlign;
+			prevFtcVidyaShort = ftcVidyaShortAlign;
+
+			// ========== BREAKEVEN LOGIC ==========
 			if (Position.MarketPosition == MarketPosition.Long && !breakEvenSet)
 			{
-				if (Close[0] > entryPrice + (breakEvenMovePoints * 0.25))  // 0.25 = point value for MNQ
+				if (Close[0] > entryPrice + (breakEvenMovePoints * 0.25))
 				{
 					SetStopLoss(CalculationMode.Price, entryPrice);
 					breakEvenSet = true;
@@ -64,84 +105,102 @@ namespace NinjaTrader.NinjaScript.Strategies
 				breakEvenSet = false;
 			}
 
-			// Wire VectorFlow indicator signals
-			// The VectorFlow indicator plots BUY/SELL columns; check if they fired this bar
-			bool buySignal = false;
-			bool sellSignal = false;
-
-			try
-			{
-				// Try to get VectorFlow indicator (check common naming patterns)
-				dynamic vf = null;
-				
-				// Attempt 1: VectorFlowV1S (most likely based on file naming)
-				try { vf = Indicators.VectorFlowV1S(Close); }
-				catch { }
-				
-				// Attempt 2: VectorFlowAlgoV1S
-				if (vf == null)
-					try { vf = Indicators.VectorFlowAlgoV1S(Close); }
-					catch { }
-				
-				// Attempt 3: VectorFlowV1SNT8
-				if (vf == null)
-					try { vf = Indicators.VectorFlowV1SNT8(Close); }
-					catch { }
-
-				// If we found the indicator, read Buy Signal and Sell Signal columns
-				if (vf != null)
-				{
-					try
-					{
-						buySignal = (vf.BuySignal != null && vf.BuySignal[0] > 0);
-						sellSignal = (vf.SellSignal != null && vf.SellSignal[0] > 0);
-					}
-					catch
-					{
-						// Column names might be different; try alternative names
-						try
-						{
-							buySignal = (vf.Buy != null && vf.Buy[0] > 0);
-							sellSignal = (vf.Sell != null && vf.Sell[0] > 0);
-						}
-						catch { }
-					}
-				}
-			}
-			catch
-			{
-				// If indicator not found, signals remain false
-				// Check NinjaTrader Output window for details
-			}
-
-			// LONG entry
+			// ========== ENTRY LOGIC ==========
 			if (buySignal && Position.MarketPosition == MarketPosition.Flat)
 			{
 				EnterLong(contractSize, "Long");
-				SetStopLoss(CalculationMode.Price, Close[0] - (stopLossPoints * 0.25));  // 87.5 points down
-				SetProfitTarget(CalculationMode.Price, Close[0] + (profitTargetPoints * 0.25));  // 44 points up
+				SetStopLoss(CalculationMode.Price, Close[0] - (stopLossPoints * 0.25));
+				SetProfitTarget(CalculationMode.Price, Close[0] + (profitTargetPoints * 0.25));
 				entryPrice = Close[0];
 				breakEvenSet = false;
 				Print(Time[0] + " LONG entry at " + Close[0] + " | Stop: " + (Close[0] - (stopLossPoints * 0.25)) + " | Target: " + (Close[0] + (profitTargetPoints * 0.25)));
 			}
 
-			// SHORT entry
 			if (sellSignal && Position.MarketPosition == MarketPosition.Flat)
 			{
 				EnterShort(contractSize, "Short");
-				SetStopLoss(CalculationMode.Price, Close[0] + (stopLossPoints * 0.25));  // 87.5 points up
-				SetProfitTarget(CalculationMode.Price, Close[0] - (profitTargetPoints * 0.25));  // 44 points down
+				SetStopLoss(CalculationMode.Price, Close[0] + (stopLossPoints * 0.25));
+				SetProfitTarget(CalculationMode.Price, Close[0] - (profitTargetPoints * 0.25));
 				entryPrice = Close[0];
 				breakEvenSet = false;
 				Print(Time[0] + " SHORT entry at " + Close[0] + " | Stop: " + (Close[0] + (stopLossPoints * 0.25)) + " | Target: " + (Close[0] - (profitTargetPoints * 0.25)));
 			}
 		}
 
+		/// <summary>
+		/// Calculate VIDYA (Volatility Index Dynamic Average)
+		/// Uses momentum ratio to adaptively weight the EMA
+		/// </summary>
+		private double CalculateVIDYA()
+		{
+			// On first bar, initialize to close
+			if (CurrentBar == 0)
+			{
+				prevVidya = Close[0];
+				return Close[0];
+			}
+
+			// Momentum: current close relative to N periods ago
+			double momentum = Math.Abs(Close[0] - Close[Math.Min(vidyaPeriod, CurrentBar)]);
+			double sumAbsMomentum = 0;
+
+			// Sum of absolute price changes over last N periods
+			int lookback = Math.Min(vidyaPeriod, CurrentBar);
+			for (int i = 0; i < lookback; i++)
+			{
+				sumAbsMomentum += Math.Abs(Close[i] - Close[i + 1]);
+			}
+
+			// Avoid division by zero
+			if (sumAbsMomentum == 0)
+				return prevVidya;
+
+			// Momentum ratio (0 to 1): how much momentum vs total volatility
+			double momentumRatio = momentum / sumAbsMomentum;
+			double baseAlpha = 2.0 / (vidyaPeriod + 1.0);
+
+			// Adaptive alpha: scale by momentum ratio
+			double adaptiveAlpha = baseAlpha * momentumRatio;
+
+			// EMA with adaptive alpha
+			double vidya = prevVidya + adaptiveAlpha * (Close[0] - prevVidya);
+			prevVidya = vidya;
+
+			return vidya;
+		}
+
 		#region Properties
 
 		[NinjaScriptProperty]
+		[Range(5, 100)]
+		[Display(Name = "FTC Period", Order = 1, GroupName = "FTC Parameters")]
+		public int FtcPeriod
+		{
+			get { return ftcPeriod; }
+			set { ftcPeriod = Math.Max(5, value); }
+		}
+
+		[NinjaScriptProperty]
+		[Range(5, 100)]
+		[Display(Name = "ATR Period", Order = 2, GroupName = "FTC Parameters")]
+		public int AtrPeriod
+		{
+			get { return atrPeriod; }
+			set { atrPeriod = Math.Max(5, value); }
+		}
+
+		[NinjaScriptProperty]
+		[Range(5, 100)]
+		[Display(Name = "VIDYA Period", Order = 3, GroupName = "Signal Parameters")]
+		public int VidyaPeriod
+		{
+			get { return vidyaPeriod; }
+			set { vidyaPeriod = Math.Max(5, value); }
+		}
+
+		[NinjaScriptProperty]
 		[Range(1, double.MaxValue)]
-		[Display(Name = "Stop Loss Points", Order = 1, GroupName = "Parameters")]
+		[Display(Name = "Stop Loss Points", Order = 1, GroupName = "Entry Parameters")]
 		public double StopLossPoints
 		{
 			get { return stopLossPoints; }
@@ -150,7 +209,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		[NinjaScriptProperty]
 		[Range(1, double.MaxValue)]
-		[Display(Name = "Profit Target Points", Order = 2, GroupName = "Parameters")]
+		[Display(Name = "Profit Target Points", Order = 2, GroupName = "Entry Parameters")]
 		public double ProfitTargetPoints
 		{
 			get { return profitTargetPoints; }
@@ -159,7 +218,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		[NinjaScriptProperty]
 		[Range(0, double.MaxValue)]
-		[Display(Name = "Breakeven Move Points", Order = 3, GroupName = "Parameters")]
+		[Display(Name = "Breakeven Move Points", Order = 3, GroupName = "Entry Parameters")]
 		public double BreakEvenMovePoints
 		{
 			get { return breakEvenMovePoints; }
@@ -168,7 +227,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
 		[NinjaScriptProperty]
 		[Range(1, 10)]
-		[Display(Name = "Contract Size", Order = 4, GroupName = "Parameters")]
+		[Display(Name = "Contract Size", Order = 4, GroupName = "Entry Parameters")]
 		public int ContractSize
 		{
 			get { return contractSize; }
