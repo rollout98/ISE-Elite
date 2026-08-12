@@ -197,5 +197,41 @@ namespace ISE.BacktestHarness.Engines
             Console.WriteLine();
         }
 
+
+        /// <summary>
+        /// Trade-by-trade dump of the worst days for one config. An aggregate says a
+        /// day lost $2,400; only the trade list says whether that was one bad trade or
+        /// six stop-outs in a row, and those call for different fixes.
+        /// </summary>
+        public void PrintWorstDays(BacktestResult result, int dayCount = 3)
+        {
+            if (result.Trades.Count == 0) return;
+
+            var byDay = result.Trades
+                .GroupBy(t => t.ExitTimeUtc.Date)
+                .Select(g => new { Day = g.Key, PnL = g.Sum(t => t.PnL - t.Slippage), Trades = g.OrderBy(t => t.EntryTimeUtc).ToList() })
+                .OrderBy(d => d.PnL)
+                .Take(dayCount);
+
+            Console.WriteLine($"===== WORST {dayCount} DAYS: {result.Config} =====\n");
+
+            foreach (var d in byDay)
+            {
+                Console.WriteLine($"  {d.Day:yyyy-MM-dd}  net ${d.PnL:F0}  ({d.Trades.Count} trades)");
+                Console.WriteLine("    ENTRY (UTC)        DIR    ENTRY      EXIT    HELD   REASON        P&L   RUNNING");
+                decimal running = 0m;
+                foreach (var t in d.Trades)
+                {
+                    running += t.PnL - t.Slippage;
+                    var held = t.ExitTimeUtc - t.EntryTimeUtc;
+                    Console.WriteLine(
+                        $"    {t.EntryTimeUtc:MM-dd HH:mm}  {t.Direction,-5} " +
+                        $"{t.EntryPrice,9:F2} {t.ExitPrice,9:F2} {held.TotalMinutes,6:F0}m  " +
+                        $"{t.ExitReason,-9} {t.PnL - t.Slippage,10:F0} {running,9:F0}");
+                }
+                Console.WriteLine();
+            }
+        }
+
     }
 }

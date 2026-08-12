@@ -72,6 +72,19 @@ namespace ISE.BacktestHarness.Engines
             // Arm 3: TRAIL    - stop follows the favourable extreme by StopDistance.
             var riskMultipliers = new[] { 0.5, 1.0, 1.5, 2.0, 3.0 };
 
+            // Daily circuit breaker. 0 = none (what every run so far has used).
+            // The worst observed day was about -$2,400 at 3 contracts with no breaker;
+            // these bracket that to show whether capping the day costs more in cut-off
+            // recoveries than it saves in blowout sessions.
+            var dailyLossLimits = new[] { 0m, 800m, 1200m, 1800m };
+
+            // Breakeven trigger, instrument-scaled. 0 = never move the stop, which is
+            // what the previous sweep did on every single config - the live method's
+            // move to BE at 250-300 ticks (62.5-75pt on MNQ) was never tested.
+            var breakEvenMoves = _instrument == "MGC"
+                ? new[] { 0.0, 7.5, 12.5 }
+                : new[] { 0.0, 62.5, 75.0 };
+
             foreach (var contracts in contractCounts)
             {
                 foreach (var stop in stopDistances)
@@ -80,8 +93,11 @@ namespace ISE.BacktestHarness.Engines
                     {
                         foreach (var filter in trendFilters)
                         {
-                            // Arm 1: hold to reversal
+                            // Arm 1: hold to reversal, crossed with stop management
+                            // (breakeven move) and the daily circuit breaker.
                             foreach (var floor in profitFloors)
+                            foreach (var be in breakEvenMoves)
+                            foreach (var dayStop in dailyLossLimits)
                             {
                                 configs.Add(new BacktestConfiguration(
                                     configId: configId++,
@@ -91,9 +107,10 @@ namespace ISE.BacktestHarness.Engines
                                     liquidityCapacity: hold,
                                     useTrailingStop: false,
                                     trendFilterBars: filter,
-                                    breakEvenMovePoints: 0,
+                                    breakEvenMovePoints: be,
                                     holdToReversal: true,
-                                    profitFloorDollars: floor));
+                                    profitFloorDollars: floor,
+                                    dailyLossLimitDollars: dayStop));
                             }
 
                             // Arm 2: fixed profit target

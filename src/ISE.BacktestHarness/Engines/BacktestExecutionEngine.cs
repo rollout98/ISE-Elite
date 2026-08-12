@@ -38,6 +38,10 @@ namespace ISE.BacktestHarness.Engines
         private decimal _profitFloorDollars = 0m;
         private bool _profitFloorLocked = false;
         private string _pendingExitReason = "";
+        private decimal _dailyLossLimit = 0m;
+        private DateTime _currentTradingDay = DateTime.MinValue;
+        private decimal _dayRealizedPnL = 0m;
+        private bool _dayHalted = false;
         private decimal _lockedFloorPrice = 0m;
         private Dictionary<DateTime, string> _externalSignals = new Dictionary<DateTime, string>();
         private int _trendFilterBars = 0; // 0 = disabled
@@ -98,6 +102,10 @@ namespace ISE.BacktestHarness.Engines
             _useTrailingStop = config.UseTrailingStop;
             _holdToReversal = config.HoldToReversal;
             _profitFloorDollars = config.ProfitFloorDollars;
+            _dailyLossLimit = config.DailyLossLimitDollars;
+            _currentTradingDay = DateTime.MinValue;
+            _dayRealizedPnL = 0m;
+            _dayHalted = false;
             _trendFilterBars = config.TrendFilterBars;
             _breakEvenMovePoints = config.BreakevenMovePoints;
             _breakEvenActivated = false;
@@ -106,6 +114,16 @@ namespace ISE.BacktestHarness.Engines
 
             foreach (var bar in orderedBars)
             {
+                // Roll the trading day first. TradingDay comes from the data feed, so
+                // the session boundary is the exchange's, not UTC midnight cutting the
+                // overnight session in half.
+                if (bar.TradingDay != _currentTradingDay)
+                {
+                    _currentTradingDay = bar.TradingDay;
+                    _dayRealizedPnL = 0m;
+                    _dayHalted = false;
+                }
+
                 _barCount++;
                 _recentBars.Add(bar);
                 if (_recentBars.Count > MaxRecentBars)
@@ -120,6 +138,18 @@ namespace ISE.BacktestHarness.Engines
                         ClosePosition(bar);
                         continue;
                     }
+                }
+
+                // Daily circuit breaker. Checked before signals so a halted day cannot
+                // open a fresh position on the same bar it was halted.
+                if (_dailyLossLimit > 0 && _dayHalted)
+                {
+                    if (_activeContracts > 0)
+                    {
+                        _pendingExitReason = "DAYSTOP";
+                        ClosePosition(bar);
+                    }
+                    continue;
                 }
 
                 var signal = GenerateSignal(bar);
@@ -429,6 +459,10 @@ namespace ISE.BacktestHarness.Engines
             _trades.Add(trade);
 
             _currentEquity += pnl - slippage;
+
+            _dayRealizedPnL += pnl - slippage;
+            if (_dailyLossLimit > 0 && _dayRealizedPnL <= -_dailyLossLimit)
+                _dayHalted = true;
             UpdateDrawdown();
 
             _activeContracts = 0;

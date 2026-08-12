@@ -15,7 +15,8 @@ namespace ISE.BacktestHarness.Models
             int trendFilterBars = 0,
             double breakEvenMovePoints = 0,
             bool holdToReversal = false,
-            decimal profitFloorDollars = 0m)
+            decimal profitFloorDollars = 0m,
+            decimal dailyLossLimitDollars = 0m)
         {
             ConfigId = configId;
             MaximumContracts = maximumContracts;
@@ -27,6 +28,7 @@ namespace ISE.BacktestHarness.Models
             BreakevenMovePoints = breakEvenMovePoints;
             HoldToReversal = holdToReversal;
             ProfitFloorDollars = profitFloorDollars;
+            DailyLossLimitDollars = dailyLossLimitDollars;
         }
 
         public int ConfigId { get; }
@@ -73,6 +75,15 @@ namespace ISE.BacktestHarness.Models
         /// </summary>
         public decimal ProfitFloorDollars { get; }
 
+        /// <summary>
+        /// Daily circuit breaker, in DOLLARS as a positive number. Once realized P&amp;L
+        /// for the trading day reaches -this, the open position is closed and no new
+        /// entries are taken until the next trading day. 0 disables.
+        /// Bounds the worst day, which a per-trade stop cannot do: three stop-outs in
+        /// one session compound into a loss no single stop was sized for.
+        /// </summary>
+        public decimal DailyLossLimitDollars { get; }
+
         public override string ToString()
         {
             return $"Config{ConfigId}: Contracts={MaximumContracts}, " +
@@ -84,6 +95,7 @@ namespace ISE.BacktestHarness.Models
                            ? $"Exit=TRAIL {StopDistanceRisk:F0}pt"
                            : $"Exit=FIXED {StopDistanceRisk * AdaptiveRiskMultiplier:F0}pt") +
                    (ProfitFloorDollars > 0 ? $", Floor=${ProfitFloorDollars:F0}" : "") +
+                   (DailyLossLimitDollars > 0 ? $", DayStop=${DailyLossLimitDollars:F0}" : "") +
                    (TrendFilterBars > 0 ? $", Filter={TrendFilterBars}bar" : ", Filter=OFF") +
                    (BreakevenMovePoints > 0 ? $", BE={BreakevenMovePoints:F1}pt" : "");
         }

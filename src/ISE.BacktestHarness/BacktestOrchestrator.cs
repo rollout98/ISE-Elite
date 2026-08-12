@@ -115,6 +115,21 @@ namespace ISE.BacktestHarness
             Console.WriteLine();
             analyzer.PrintTopResults(results, 20);
 
+            // Forensics on the losing days for a like-for-like baseline: hold to
+            // reversal, no stop management, no day cap, 3 contracts. This is the
+            // configuration whose -$2,400 day prompted the question, so dump the
+            // actual trades rather than reasoning about the aggregate.
+            var baseline = results
+                .Where(r => r.Config.HoldToReversal
+                         && r.Config.MaximumContracts == 3
+                         && r.Config.DailyLossLimitDollars == 0m
+                         && r.Config.BreakevenMovePoints == 0)
+                .OrderByDescending(r => r.GrossProfit)
+                .FirstOrDefault();
+
+            if (baseline != null)
+                analyzer.PrintWorstDays(baseline, 3);
+
             Console.WriteLine($"\n{'='*60}");
             Console.WriteLine($"Backtest Complete!");
             Console.WriteLine($"Results: {outputPath}");
