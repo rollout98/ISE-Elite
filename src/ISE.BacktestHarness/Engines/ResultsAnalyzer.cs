@@ -26,7 +26,7 @@ namespace ISE.BacktestHarness.Engines
             using (var writer = new StreamWriter(outputPath, false, Encoding.UTF8))
             {
                 // Header
-                writer.WriteLine("Rank,ConfigId,MaxContracts,RiskMult,StopDist,MaxHoldBars,TrendFilter,ExitMode," +
+                writer.WriteLine("Rank,ConfigId,MaxContracts,ProfitFloor,StopDist,MaxHoldBars,TrendFilter,ExitMode," +
                                 "GrossProfit,ReturnPct,TotalTrades,WinRate,WinTrades,LossTrades," +
                                 "AvgPnL,LargestWin,LargestLoss,MaxDD,ProfitFactor,Sharpe,Score");
 
@@ -34,15 +34,19 @@ namespace ISE.BacktestHarness.Engines
                 int rank = 1;
                 foreach (var result in sorted)
                 {
+                    var exitMode = result.Config.HoldToReversal ? "REVERSAL"
+                                 : result.Config.UseTrailingStop ? "TRAIL"
+                                 : "FIXED";
+
                     writer.WriteLine(
                         $"{rank}," +
                         $"{result.Config.ConfigId}," +
                         $"{result.Config.MaximumContracts}," +
-                        $"{result.Config.AdaptiveRiskMultiplier:F2}," +
+                        $"{result.Config.ProfitFloorDollars:F0}," +
                         $"{result.Config.StopDistanceRisk:F2}," +
                         $"{result.Config.LiquidityCapacity:F0}," +
                         $"{result.Config.TrendFilterBars}," +
-                        $"{(result.Config.UseTrailingStop ? "TRAIL" : "FIXED")}," +
+                        $"{exitMode}," +
                         $"{result.GrossProfit:F2}," +
                         $"{result.ReturnPercent:F2}," +
                         $"{result.TotalTrades}," +

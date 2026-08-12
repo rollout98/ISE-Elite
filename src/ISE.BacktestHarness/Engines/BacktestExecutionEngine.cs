@@ -34,6 +34,10 @@ namespace ISE.BacktestHarness.Engines
         private decimal _targetPoints = 1m;
         private int _maxHoldBars = 50;
         private bool _useTrailingStop = false;
+        private bool _holdToReversal = false;
+        private decimal _profitFloorDollars = 0m;
+        private bool _profitFloorLocked = false;
+        private decimal _lockedFloorPrice = 0m;
         private Dictionary<DateTime, string> _externalSignals = new Dictionary<DateTime, string>();
         private int _trendFilterBars = 0; // 0 = disabled
         private decimal _bestPrice = 0m; // best price reached in the trade's favour
@@ -91,6 +95,8 @@ namespace ISE.BacktestHarness.Engines
             _targetPoints = _stopPoints * (decimal)config.AdaptiveRiskMultiplier;
             _maxHoldBars = (int)config.LiquidityCapacity;
             _useTrailingStop = config.UseTrailingStop;
+            _holdToReversal = config.HoldToReversal;
+            _profitFloorDollars = config.ProfitFloorDollars;
             _trendFilterBars = config.TrendFilterBars;
             _breakEvenMovePoints = config.BreakevenMovePoints;
             _breakEvenActivated = false;
@@ -115,6 +121,22 @@ namespace ISE.BacktestHarness.Engines
                 }
 
                 var signal = GenerateSignal(bar);
+
+                // "Exit governs entry": while in a trade, an opposing signal is the exit.
+                // A same-side signal is ignored entirely. In hold-to-reversal mode this
+                // is the ONLY discretionary exit - there is no profit target.
+                if (_holdToReversal && _activeContracts > 0)
+                {
+                    var opposing =
+                        (_activeDirection == "LONG" && signal == "SELL") ||
+                        (_activeDirection == "SHORT" && signal == "BUY");
+
+                    if (opposing)
+                    {
+                        ClosePosition(bar);
+                        continue;
+                    }
+                }
 
                 if (signal == "BUY" && _activeContracts == 0)
                 {
@@ -237,6 +259,30 @@ namespace ISE.BacktestHarness.Engines
         {
             get
             {
+                // Profit floor. Once unrealized P&L on the whole position reaches the
+                // dollar threshold, we lock a stop at the price that secures it and
+                // never give it back. Checked before breakeven because the floor is
+                // strictly the more protective of the two once it engages.
+                if (_profitFloorDollars > 0 && !_profitFloorLocked && _activeContracts > 0)
+                {
+                    var unrealized = (_activeDirection == "LONG")
+                        ? (_bestPrice - _entryPrice) * _pointValue * _activeContracts
+                        : (_entryPrice - _bestPrice) * _pointValue * _activeContracts;
+
+                    if (unrealized >= _profitFloorDollars)
+                    {
+                        // Price that yields exactly the floor amount, per contract.
+                        var floorPoints = _profitFloorDollars / (_pointValue * _activeContracts);
+                        _lockedFloorPrice = _activeDirection == "LONG"
+                            ? _entryPrice + floorPoints
+                            : _entryPrice - floorPoints;
+                        _profitFloorLocked = true;
+                    }
+                }
+
+                if (_profitFloorLocked)
+                    return _lockedFloorPrice;
+
                 // Check if we should activate breakeven
                 if (_breakEvenMovePoints > 0 && !_breakEvenActivated)
                 {
@@ -266,15 +312,21 @@ namespace ISE.BacktestHarness.Engines
         private bool StopTouched(HistoricalBar bar) =>
             _activeDirection == "LONG" ? bar.Low <= StopLevel : bar.High >= StopLevel;
 
+        // Neither trailing nor hold-to-reversal mode has a fixed target. In reversal
+        // mode the run ends on the opposing signal or the stop/floor, never a target.
         private bool TargetTouched(HistoricalBar bar) =>
-            !_useTrailingStop &&
+            !_useTrailingStop && !_holdToReversal &&
             (_activeDirection == "LONG" ? bar.High >= TargetLevel : bar.Low <= TargetLevel);
 
-        // Advance the trail on favourable movement. Called AFTER the stop test for the
-        // current bar, so a bar cannot both extend the trail and be saved by it.
+        // Advance the favourable extreme. Called AFTER the stop test for the current
+        // bar, so a bar cannot both extend the extreme and be saved by that extension.
+        // This runs in EVERY mode, not just trailing: the dollar profit floor measures
+        // unrealized P&L off _bestPrice, so leaving it pinned at the entry price would
+        // mean the floor never engages. Whether _bestPrice anchors the stop is a
+        // separate question, decided in StopLevel by _useTrailingStop.
         private void UpdateTrail(HistoricalBar bar)
         {
-            if (!_useTrailingStop) return;
+            if (_activeContracts == 0) return;
             if (_activeDirection == "LONG")
             {
                 if (bar.High > _bestPrice) _bestPrice = bar.High;
@@ -291,12 +343,16 @@ namespace ISE.BacktestHarness.Engines
 
             _activeInstrument = entryBar.Instrument;
             _activeDirection = direction;
-            _activeContracts = Math.Min(maxContracts, 4);
+            // No arbitrary cap. A previous Math.Min(maxContracts, 4) here made every
+            // 5-contract config report identical results to its 4-contract twin.
+            _activeContracts = maxContracts;
             _entryPrice = entryBar.Close;
             _entryTimeUtc = entryBar.TimestampUtc.UtcDateTime;
             _barsHeld = 0;
             _bestPrice = entryBar.Close;
             _breakEvenActivated = false;
+            _profitFloorLocked = false;
+            _lockedFloorPrice = 0m;
 
             _currentEquity -= (_slippagePerContract + _commissionPerContract) * _activeContracts;
             UpdateDrawdown();
@@ -325,9 +381,11 @@ namespace ISE.BacktestHarness.Engines
             // geometry is inverted and every P&L figure downstream is fiction - fail
             // loudly rather than report an attractive fake number.
             // Trailing mode is exempt: a trailed stop-out SHOULD be able to profit,
-            // since the trail locks in gains above the entry. Fixed mode has no such
-            // excuse - a stop below entry that books a profit means inverted signs.
-            if (!_useTrailingStop && StopTouched(exitBar) && pnl > 0m)
+            // since the trail locks in gains above the entry. A floor-locked or
+            // breakeven-locked stop is exempt for the same reason - locking a $500
+            // floor and then being stopped at it is a WIN by design, not an inversion.
+            var stopCanProfit = _useTrailingStop || _profitFloorLocked || _breakEvenActivated;
+            if (!stopCanProfit && StopTouched(exitBar) && pnl > 0m)
                 throw new InvalidOperationException(
                     $"Stop-out produced a PROFIT ({_activeDirection}, entry {_entryPrice}, " +
                     $"exit {exitPrice}, pnl {pnl}). Trade geometry is inverted.");

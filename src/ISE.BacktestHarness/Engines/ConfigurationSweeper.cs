@@ -25,8 +25,10 @@ namespace ISE.BacktestHarness.Engines
             var configs = new List<BacktestConfiguration>();
             var configId = 1;
 
-            // MaximumContracts: test 1-5 for proper sizing analysis
-            var contractCounts = new[] { 1, 2, 3, 4, 5 };
+            // MaximumContracts: 1-10. The upper end matters because the live plan is a
+            // session ramp - open Asia at ~3, and once profit is booked, size NY up to
+            // 7-10. A sweep that stops at 4 or 5 cannot price that second leg.
+            var contractCounts = new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 
             // StopDistanceRisk: instrument-specific, scaled to comparable dollar risk.
             // MNQ: 60, 75, 87.5 points ($2/pt -> $120-$175 risk per contract). Validated live.
@@ -37,59 +39,44 @@ namespace ISE.BacktestHarness.Engines
                 ? new[] { 5.0, 7.5, 10.0, 12.5, 15.0, 17.5, 20.0, 25.0, 30.0 }
                 : new[] { 60.0, 75.0, 87.5 };
 
-            // Breakeven trigger points, also instrument-scaled.
-            // MNQ live: move to BE at +62.5/75 pts (roughly 0.7-0.85x the stop).
-            var breakEvenMoves = _instrument == "MGC"
-                ? new[] { 7.5, 12.5 }
-                : new[] { 62.5, 75.0 };
+            // Profit floor in DOLLARS on the whole position. 0 = no floor (pure
+            // hold-to-reversal). 500 = the stated daily goal. 1000 tests whether
+            // letting it run further before locking is worth the give-back risk.
+            var profitFloors = new[] { 0m, 500m, 1000m };
 
-            // Minimum stop at which breakeven logic is worth applying.
-            var beMinStop = _instrument == "MGC" ? 10.0 : 60.0;
+            // MAX HOLD in bars (minutes on 1-min data). Reversal exits are the primary
+            // mechanism now, so these are a safety cap rather than a tuning knob.
+            //   240 = 4hrs, 480 = 8hrs, 1440 = 24hrs
+            var maxHolds = new[] { 240.0, 480.0, 1440.0 };
 
-            // AdaptiveRiskMultiplier: reward:risk ratio. Profit target = stop * this.
-            var riskMultipliers = new[] { 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 10.0 };
+            // Higher-timeframe gate, in 1-minute bars. 0 disables.
+            var trendFilters = new[] { 0, 60, 240 };
 
-            // LiquidityCapacity: MAX HOLD in BARS (minutes on 1-min data)
-            var liquidityCapacities = new[] { 50.0, 120.0, 240.0, 480.0, 1440.0 };
-
-            // Generate configurations: for MGC, will be ~1,400 (5 contracts × 7 stops × 8 risk × 5 holds...)
+            // Hold-to-reversal only. There is no AdaptiveRiskMultiplier dimension here:
+            // that value exists solely to compute a fixed profit target, and this
+            // strategy has none. Sweeping it previously produced thousands of rows that
+            // differed only in a field the engine no longer reads.
             foreach (var contracts in contractCounts)
             {
-                foreach (var risk in riskMultipliers)
+                foreach (var stop in stopDistances)
                 {
-                    foreach (var stop in stopDistances)
+                    foreach (var floor in profitFloors)
                     {
-                        // 3 hold limits per combo
-                        foreach (var i in new[] { 0, 2, 4 }) // 50, 240, 1440 bars
+                        foreach (var hold in maxHolds)
                         {
-                            // Higher-timeframe gate: off, 1 hour, 4 hours.
-                            foreach (var filter in new[] { 0, 60, 240 })
+                            foreach (var filter in trendFilters)
                             {
-                                // Fixed target
                                 configs.Add(new BacktestConfiguration(
-                                    configId++, contracts, risk, stop,
-                                    liquidityCapacities[i], false, filter, 0));
-
-                                // With breakeven: once profit reaches the trigger, stop moves to entry.
-                                // Only applied to stops wide enough for it to mean anything.
-                                if (stop >= beMinStop)
-                                {
-                                    foreach (var beMove in breakEvenMoves)
-                                    {
-                                        configs.Add(new BacktestConfiguration(
-                                            configId++, contracts, risk, stop,
-                                            liquidityCapacities[i], false, filter, beMove));
-                                    }
-                                }
-
-                                // Trailing. RiskMult is irrelevant here, so emit one
-                                // trailing variant per (contracts, stop, hold, filter).
-                                if (Math.Abs(risk - riskMultipliers[0]) < 0.001)
-                                {
-                                    configs.Add(new BacktestConfiguration(
-                                        configId++, contracts, risk, stop,
-                                        liquidityCapacities[i], true, filter, 0));
-                                }
+                                    configId: configId++,
+                                    maximumContracts: contracts,
+                                    adaptiveRiskMultiplier: 0,   // unused in reversal mode
+                                    stopDistanceRisk: stop,
+                                    liquidityCapacity: hold,
+                                    useTrailingStop: false,
+                                    trendFilterBars: filter,
+                                    breakEvenMovePoints: 0,
+                                    holdToReversal: true,
+                                    profitFloorDollars: floor));
                             }
                         }
                     }

@@ -13,7 +13,9 @@ namespace ISE.BacktestHarness.Models
             double liquidityCapacity,
             bool useTrailingStop = false,
             int trendFilterBars = 0,
-            double breakEvenMovePoints = 0)
+            double breakEvenMovePoints = 0,
+            bool holdToReversal = false,
+            decimal profitFloorDollars = 0m)
         {
             ConfigId = configId;
             MaximumContracts = maximumContracts;
@@ -23,6 +25,8 @@ namespace ISE.BacktestHarness.Models
             UseTrailingStop = useTrailingStop;
             TrendFilterBars = trendFilterBars;
             BreakevenMovePoints = breakEvenMovePoints;
+            HoldToReversal = holdToReversal;
+            ProfitFloorDollars = profitFloorDollars;
         }
 
         public int ConfigId { get; }
@@ -53,15 +57,33 @@ namespace ISE.BacktestHarness.Models
         /// </summary>
         public double BreakevenMovePoints { get; }
 
+        /// <summary>
+        /// Devon's live method. There is NO profit target: the position is held until
+        /// the opposite VectorFlow signal fires ("exit governs entry"). Any same-side
+        /// signal while in a trade is ignored. Combine with ProfitFloorDollars to lock
+        /// a floor once the trade is meaningfully in profit.
+        /// </summary>
+        public bool HoldToReversal { get; }
+
+        /// <summary>
+        /// Once unrealized P&amp;L on the position reaches this dollar amount, the stop
+        /// moves to the price that locks it in. 0 disables. Expressed in DOLLARS, not
+        /// points, because the floor is a account-level goal ($500) and the point
+        /// equivalent differs per instrument and contract count.
+        /// </summary>
+        public decimal ProfitFloorDollars { get; }
+
         public override string ToString()
         {
             return $"Config{ConfigId}: Contracts={MaximumContracts}, " +
-                   $"RiskMult={AdaptiveRiskMultiplier:F2}, " +
                    $"StopDist={StopDistanceRisk:F2}, " +
                    $"MaxHold={LiquidityCapacity:F0}bars, " +
-                   (UseTrailingStop
-                       ? $"Exit=TRAIL {StopDistanceRisk:F0}pt"
-                       : $"Exit=FIXED {StopDistanceRisk * AdaptiveRiskMultiplier:F0}pt") +
+                   (HoldToReversal
+                       ? "Exit=REVERSAL"
+                       : UseTrailingStop
+                           ? $"Exit=TRAIL {StopDistanceRisk:F0}pt"
+                           : $"Exit=FIXED {StopDistanceRisk * AdaptiveRiskMultiplier:F0}pt") +
+                   (ProfitFloorDollars > 0 ? $", Floor=${ProfitFloorDollars:F0}" : "") +
                    (TrendFilterBars > 0 ? $", Filter={TrendFilterBars}bar" : ", Filter=OFF") +
                    (BreakevenMovePoints > 0 ? $", BE={BreakevenMovePoints:F1}pt" : "");
         }
