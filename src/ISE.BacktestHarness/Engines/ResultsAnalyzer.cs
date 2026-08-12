@@ -135,6 +135,15 @@ namespace ISE.BacktestHarness.Engines
                     $"     DAYS   {result.TradingDays,3} total | {result.LosingDays,3} losing | " +
                     $"{result.PctDaysAbove(500m),5:F0}% >= $500 | {result.PctDaysAbove(1000m),5:F0}% >= $1000");
 
+                // What actually closed the trades. A config that looks like
+                // hold-to-reversal but exits mostly on TIMECAP is a time-exit strategy
+                // wearing the wrong label, and its numbers say nothing about reversals.
+                var byReason = result.Trades
+                    .GroupBy(t => t.ExitReason)
+                    .OrderByDescending(g => g.Count())
+                    .Select(g => $"{g.Key} {g.Count()} (${g.Sum(t => t.PnL - t.Slippage):F0})");
+                Console.WriteLine($"     EXITS  {string.Join(" | ", byReason)}");
+
                 var longs = result.Trades.Where(t => t.Direction == "LONG").ToList();
                 var shorts = result.Trades.Where(t => t.Direction == "SHORT").ToList();
                 Console.WriteLine(

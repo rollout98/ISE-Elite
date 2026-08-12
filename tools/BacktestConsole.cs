@@ -103,7 +103,7 @@ namespace ISE.BacktestTools
 
                 // Step 2: Run backtest orchestrator
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                Console.WriteLine("STEP 2: Running Backtest (1944 Parameter Configurations)");
+                Console.WriteLine("STEP 2: Running Backtest (parameter sweep)");
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
                 var accountSize = 50000m;

@@ -37,6 +37,7 @@ namespace ISE.BacktestHarness.Engines
         private bool _holdToReversal = false;
         private decimal _profitFloorDollars = 0m;
         private bool _profitFloorLocked = false;
+        private string _pendingExitReason = "";
         private decimal _lockedFloorPrice = 0m;
         private Dictionary<DateTime, string> _externalSignals = new Dictionary<DateTime, string>();
         private int _trendFilterBars = 0; // 0 = disabled
@@ -115,6 +116,7 @@ namespace ISE.BacktestHarness.Engines
                     _barsHeld++;
                     if (_barsHeld > _maxHoldBars)
                     {
+                        _pendingExitReason = "TIMECAP";
                         ClosePosition(bar);
                         continue;
                     }
@@ -133,6 +135,7 @@ namespace ISE.BacktestHarness.Engines
 
                     if (opposing)
                     {
+                        _pendingExitReason = "REVERSAL";
                         ClosePosition(bar);
                         continue;
                     }
@@ -161,6 +164,7 @@ namespace ISE.BacktestHarness.Engines
 
             if (_activeContracts > 0 && orderedBars.Count > 0)
             {
+                _pendingExitReason = "ENDOFDATA";
                 ClosePosition(orderedBars[orderedBars.Count - 1]);
             }
 
@@ -353,6 +357,7 @@ namespace ISE.BacktestHarness.Engines
             _breakEvenActivated = false;
             _profitFloorLocked = false;
             _lockedFloorPrice = 0m;
+            _pendingExitReason = "";
 
             _currentEquity -= (_slippagePerContract + _commissionPerContract) * _activeContracts;
             UpdateDrawdown();
@@ -367,12 +372,26 @@ namespace ISE.BacktestHarness.Engines
             // trade never had. Stop is tested first: if a bar spans both levels we
             // assume the adverse fill rather than the favourable one.
             decimal exitPrice;
+            string exitReason;
             if (StopTouched(exitBar))
+            {
                 exitPrice = StopLevel;
+                // A locked floor is still a stop, but it is a WINNING one - label it
+                // separately so a $500 floor lock is not filed alongside a real loss.
+                exitReason = _profitFloorLocked ? "FLOOR"
+                           : _breakEvenActivated ? "BREAKEVEN"
+                           : "STOP";
+            }
             else if (TargetTouched(exitBar))
+            {
                 exitPrice = TargetLevel;
+                exitReason = "TARGET";
+            }
             else
-                exitPrice = exitBar.Close; // time-based exit (hold cap or end of data)
+            {
+                exitPrice = exitBar.Close;
+                exitReason = string.IsNullOrEmpty(_pendingExitReason) ? "UNKNOWN" : _pendingExitReason;
+            }
 
             var pnl = CalculatePnL(exitPrice, _pointValue);
 
@@ -404,7 +423,8 @@ namespace ISE.BacktestHarness.Engines
                 exitPrice,
                 _activeContracts,
                 pnl,
-                slippage);
+                slippage,
+                exitReason);
 
             _trades.Add(trade);
 

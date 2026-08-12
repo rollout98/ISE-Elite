@@ -15,7 +15,8 @@ namespace ISE.BacktestHarness.Models
             decimal exitPrice,
             int contracts,
             decimal pnl,
-            decimal slippage)
+            decimal slippage,
+            string exitReason = "UNKNOWN")
         {
             EntryTimeUtc = entryTimeUtc;
             ExitTimeUtc = exitTimeUtc;
@@ -25,6 +26,7 @@ namespace ISE.BacktestHarness.Models
             Contracts = contracts;
             PnL = pnl;
             Slippage = slippage;
+            ExitReason = exitReason;
         }
 
         public DateTime EntryTimeUtc { get; }
@@ -36,5 +38,13 @@ namespace ISE.BacktestHarness.Models
         public decimal PnL { get; }
         public decimal Slippage { get; }
         public bool IsWin => PnL > 0;
+
+        /// <summary>
+        /// What actually closed this trade: REVERSAL (opposing VectorFlow signal),
+        /// STOP (initial stop or locked floor), TARGET, TIMECAP (max-hold reached),
+        /// or ENDOFDATA. Without this we cannot tell a hold-to-reversal result from a
+        /// time-exit result wearing the same label.
+        /// </summary>
+        public string ExitReason { get; }
     }
 }

@@ -51,8 +51,14 @@ namespace ISE.BacktestHarness.Engines
             //   240 = 4hrs, 480 = 8hrs, 1440 = 24hrs
             var maxHolds = new[] { 240.0, 480.0, 1440.0 };
 
-            // Higher-timeframe gate, in 1-minute bars. 0 disables.
-            var trendFilters = new[] { 0, 60, 240 };
+            // Higher-timeframe gate, in 1-minute bars.
+            // DISABLED: GenerateSignal returns external VectorFlow signals before it
+            // ever reaches TrendBias(), so this parameter has no effect on any run that
+            // loads a signal CSV - it was silently producing three identical copies of
+            // every config. VectorFlow already carries its own higher-timeframe gate
+            // (the FTC latch on SMA100/ATR100), so a second one is likely redundant
+            // anyway. Left as a single value until we decide whether to wire it up.
+            var trendFilters = new[] { 0 };
 
             // Hold-to-reversal only. There is no AdaptiveRiskMultiplier dimension here:
             // that value exists solely to compute a fixed profit target, and this
