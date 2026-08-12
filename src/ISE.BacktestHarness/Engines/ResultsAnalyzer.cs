@@ -119,6 +119,7 @@ namespace ISE.BacktestHarness.Engines
             // actually beat a fixed target on the same data?
             PrintExitModeComparison(allResults, 3);
             PrintDailyGoalComparison(allResults, 2);
+            PrintSessionBreakdown(allResults, 3);
 
             int rank = 1;
             foreach (var result in sorted)
@@ -271,6 +272,58 @@ namespace ISE.BacktestHarness.Engines
                 Console.WriteLine(
                     $"  {label,-8} {r.GrossProfit,10:F0} {r.MedianDailyPnL,9:F0} {r.AvgDailyPnL,9:F0} " +
                     $"{r.TradingDays,5} {r.LosingDays,7} {r.PctDaysAbove(500m),6:F0}% {r.MaxDrawdown,10:F0}");
+            }
+            Console.WriteLine();
+        }
+
+
+        /// <summary>
+        /// Where in the 24h cycle does this instrument actually earn? Splits the best
+        /// 3-contract config by entry time in CENTRAL time, which is the clock the
+        /// charts use. If gold earns overnight and Nasdaq earns at the NY open, one
+        /// account could run gold in Asia and hand off to Nasdaq for London/NY - but
+        /// only if the session P&amp;L actually separates that way.
+        /// </summary>
+        private void PrintSessionBreakdown(List<BacktestResult> results, int contracts)
+        {
+            var best = results
+                .Where(r => r.Config.MaximumContracts == contracts && r.TotalTrades > 20)
+                .OrderByDescending(r => r.GrossProfit)
+                .FirstOrDefault();
+            if (best == null) return;
+
+            // Data covers Jun-Aug, so Central is UTC-5 (CDT) throughout.
+            Func<BacktestTrade, int> ctHour = t => (t.EntryTimeUtc.AddHours(-5).Hour + 24) % 24;
+
+            string Session(int h) =>
+                (h >= 17 || h < 2) ? "ASIA   (17-02 CT)"
+                : h < 7            ? "LONDON (02-07 CT)"
+                : h < 15           ? "NY     (07-15 CT)"
+                                   : "LATE   (15-17 CT)";
+
+            Console.WriteLine($"===== SESSION BREAKDOWN ({contracts} contracts) =====");
+            Console.WriteLine($"  {best.Config}\n");
+
+            Console.WriteLine("  SESSION              TRADES   WIN%        GROSS    AVG/TRADE");
+            foreach (var g in best.Trades
+                        .GroupBy(t => Session(ctHour(t)))
+                        .OrderByDescending(g => g.Sum(t => t.PnL - t.Slippage)))
+            {
+                var n = g.Count();
+                var gross = g.Sum(t => t.PnL - t.Slippage);
+                Console.WriteLine($"  {g.Key,-20} {n,6} {g.Count(t => t.IsWin) * 100.0 / n,6:F1} " +
+                                  $"{gross,12:F0} {gross / n,12:F0}");
+            }
+
+            Console.WriteLine("\n  BY HOUR (CT)   trades / gross");
+            for (int h = 0; h < 24; h++)
+            {
+                var bucket = best.Trades.Where(t => ctHour(t) == h).ToList();
+                if (bucket.Count == 0) continue;
+                var gross = bucket.Sum(t => t.PnL - t.Slippage);
+                var bar = new string(gross >= 0 ? '+' : '-',
+                                     Math.Min(40, (int)(Math.Abs(gross) / 500) + 1));
+                Console.WriteLine($"  {h:00}:00  {bucket.Count,3}  {gross,9:F0}  {bar}");
             }
             Console.WriteLine();
         }
