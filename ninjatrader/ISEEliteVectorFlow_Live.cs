@@ -65,9 +65,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 			// LONG entry
 			if (buySignal && Position.MarketPosition == MarketPosition.Flat)
 			{
-				Buy("Long", contractSize);
-				SetStopLoss(CalculationMode.Ticks, 350);  // 87.5 points = 350 ticks
-				SetProfitTarget(CalculationMode.Ticks, 220);  // 44 points = 220 ticks (approximately)
+				AddOrder(OrderAction.Buy, OrderType.Market, contractSize, 0, 0, "", "Long");
+				SetStopLoss(CalculationMode.Points, stopLossPoints);
+				SetProfitTarget(CalculationMode.Points, profitTargetPoints);
 				entryPrice = Close[0];
 				breakEvenSet = false;
 				Print(Time[0] + " LONG entry at " + Close[0].ToString("F2"));
@@ -76,9 +76,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 			// SHORT entry
 			if (sellSignal && Position.MarketPosition == MarketPosition.Flat)
 			{
-				Sell("Short", contractSize);
-				SetStopLoss(CalculationMode.Ticks, 350);  // 87.5 points = 350 ticks
-				SetProfitTarget(CalculationMode.Ticks, 220);  // 44 points = 220 ticks
+				AddOrder(OrderAction.Sell, OrderType.Market, contractSize, 0, 0, "", "Short");
+				SetStopLoss(CalculationMode.Points, stopLossPoints);
+				SetProfitTarget(CalculationMode.Points, profitTargetPoints);
 				entryPrice = Close[0];
 				breakEvenSet = false;
 				Print(Time[0] + " SHORT entry at " + Close[0].ToString("F2"));
