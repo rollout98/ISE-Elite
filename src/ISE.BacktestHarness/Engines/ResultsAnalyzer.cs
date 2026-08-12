@@ -119,6 +119,7 @@ namespace ISE.BacktestHarness.Engines
             // actually beat a fixed target on the same data?
             PrintExitModeComparison(allResults, 3);
             PrintDailyGoalComparison(allResults, 2);
+            PrintDailyStopComparison(allResults, 3);
             PrintSessionBreakdown(allResults, 3);
 
             int rank = 1;
@@ -324,6 +325,44 @@ namespace ISE.BacktestHarness.Engines
                 var bar = new string(gross >= 0 ? '+' : '-',
                                      Math.Min(40, (int)(Math.Abs(gross) / 500) + 1));
                 Console.WriteLine($"  {h:00}:00  {bucket.Count,3}  {gross,9:F0}  {bar}");
+            }
+            Console.WriteLine();
+        }
+
+
+        /// <summary>
+        /// Does a daily LOSS cap help? Holds everything else constant and varies only
+        /// the cap. Note this is the lever that can actually touch max drawdown, unlike
+        /// the profit halt - though only partly, since drawdown accumulates across
+        /// consecutive losing days and a daily cap bounds just one of them.
+        /// </summary>
+        private void PrintDailyStopComparison(List<BacktestResult> results, int contracts)
+        {
+            var pool = results.Where(r => r.Config.MaximumContracts == contracts).ToList();
+            if (pool.Count == 0) return;
+
+            var baseline = pool.Where(r => r.Config.DailyLossLimitDollars == 0m)
+                               .OrderByDescending(r => r.GrossProfit).FirstOrDefault();
+            if (baseline == null) return;
+
+            var peers = pool.Where(r =>
+                r.Config.StopDistanceRisk == baseline.Config.StopDistanceRisk &&
+                r.Config.AdaptiveRiskMultiplier == baseline.Config.AdaptiveRiskMultiplier &&
+                r.Config.LiquidityCapacity == baseline.Config.LiquidityCapacity &&
+                r.Config.HoldToReversal == baseline.Config.HoldToReversal &&
+                r.Config.UseTrailingStop == baseline.Config.UseTrailingStop &&
+                r.Config.BreakevenMovePoints == baseline.Config.BreakevenMovePoints)
+                .OrderBy(r => r.Config.DailyLossLimitDollars).ToList();
+
+            Console.WriteLine($"===== DAILY LOSS CAP ({contracts} contracts) =====");
+            Console.WriteLine($"  {baseline.Config}\n");
+            Console.WriteLine("  CAP AT       GROSS   MED/DAY  LOSING   WORST DAY      MAXDD");
+            foreach (var r in peers)
+            {
+                var label = r.Config.DailyLossLimitDollars == 0m
+                    ? "none" : $"${r.Config.DailyLossLimitDollars:F0}";
+                Console.WriteLine($"  {label,-8} {r.GrossProfit,10:F0} {r.MedianDailyPnL,9:F0} " +
+                                  $"{r.LosingDays,7} {r.WorstDay,11:F0} {r.MaxDrawdown,10:F0}");
             }
             Console.WriteLine();
         }

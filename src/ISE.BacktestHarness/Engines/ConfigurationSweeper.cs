@@ -81,7 +81,11 @@ namespace ISE.BacktestHarness.Engines
             // Daily profit halt. 0 = trade the whole session (what every run so far did).
             // The rest test "hit the number and walk away" at and around Devon's live
             // $500 goal, scaled up so the effect is visible at larger contract counts too.
-            var dailyProfitTargets = new[] { 0m, 500m, 600m, 750m, 1000m };
+            // Collapsed to "off". Measured on MNQ 5m, MNQ 2m and MGC: halting the day
+            // at a profit number cost 20-40% of gross every time and never reduced the
+            // count of LOSING days, because a profit cap cannot touch a losing session.
+            // Keeping it in the sweep just multiplies runtime to re-learn the same thing.
+            var dailyProfitTargets = new[] { 0m };
 
             // Breakeven trigger, instrument-scaled. 0 = never move the stop, which is
             // what the previous sweep did on every single config - the live method's
@@ -125,6 +129,7 @@ namespace ISE.BacktestHarness.Engines
                             foreach (var risk in riskMultipliers)
                             foreach (var dayGoal in dailyProfitTargets)
                             foreach (var be in breakEvenMoves)
+                            foreach (var dayStop in dailyLossLimits)
                             {
                                 configs.Add(new BacktestConfiguration(
                                     configId: configId++,
@@ -137,22 +142,26 @@ namespace ISE.BacktestHarness.Engines
                                     breakEvenMovePoints: be,
                                     holdToReversal: false,
                                     profitFloorDollars: 0m,
-                                    dailyLossLimitDollars: 0m,
+                                    dailyLossLimitDollars: dayStop,
                                     dailyProfitTargetDollars: dayGoal));
                             }
 
                             // Arm 3: trailing stop (riskMultiplier is unread here)
-                            configs.Add(new BacktestConfiguration(
-                                configId: configId++,
-                                maximumContracts: contracts,
-                                adaptiveRiskMultiplier: 0,
-                                stopDistanceRisk: stop,
-                                liquidityCapacity: hold,
-                                useTrailingStop: true,
-                                trendFilterBars: filter,
-                                breakEvenMovePoints: 0,
-                                holdToReversal: false,
-                                profitFloorDollars: 0m));
+                            foreach (var dayStop in dailyLossLimits)
+                            {
+                                configs.Add(new BacktestConfiguration(
+                                    configId: configId++,
+                                    maximumContracts: contracts,
+                                    adaptiveRiskMultiplier: 0,
+                                    stopDistanceRisk: stop,
+                                    liquidityCapacity: hold,
+                                    useTrailingStop: true,
+                                    trendFilterBars: filter,
+                                    breakEvenMovePoints: 0,
+                                    holdToReversal: false,
+                                    profitFloorDollars: 0m,
+                                    dailyLossLimitDollars: dayStop));
+                            }
                         }
                     }
                 }
