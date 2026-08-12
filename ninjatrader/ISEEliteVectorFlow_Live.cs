@@ -3,12 +3,8 @@ using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using NinjaTrader.Cbi;
-using NinjaTrader.Gui;
-using NinjaTrader.Gui.Tools;
 using NinjaTrader.Data;
 using NinjaTrader.NinjaScript;
-using NinjaTrader.Core.FloatingPoint;
-using NinjaTrader.NinjaScript.Indicators;
 #endregion
 
 namespace NinjaTrader.NinjaScript.Strategies
@@ -27,22 +23,16 @@ namespace NinjaTrader.NinjaScript.Strategies
 		{
 			if (State == State.SetDefaults)
 			{
-				Description = "ISE Elite VectorFlow Live - Backtest validated ($906/day)";
+				Description = "ISE Elite VectorFlow Live";
 				Name = "ISEEliteVectorFlowLive";
 				Calculate = Calculate.OnBarClose;
 				EntriesPerDirection = 1;
 				EntryHandling = EntryHandling.AllEntries;
 				IsExitOnSessionCloseStrategy = false;
 				ExitOnSessionCloseSeconds = 300;
-				IsFillLimitOnClose = false;
 				TraceOrders = true;
-				RealtimeErrorHandling = RealtimeErrorHandling.StopCancelCloseAnyTradingPosition;
 				StopTargetHandling = StopTargetHandling.PerEntryExecution;
 				BarsRequiredToTrade = 0;
-			}
-			else if (State == State.Configure)
-			{
-				AddPlot(Brushes.White, "PositionPnL");
 			}
 		}
 
@@ -55,13 +45,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 			if (Position.MarketPosition != MarketPosition.Flat)
 			{
 				double unrealizedPnL = Position.GetUnrealizedProfitLoss(Close[0], PerformanceUnit.Points);
-				PlotValues[0][0] = unrealizedPnL;
 
 				if (!breakEvenSet && unrealizedPnL >= breakEvenMovePoints)
 				{
 					SetStopLoss(CalculationMode.Price, entryPrice);
 					breakEvenSet = true;
-					Print(Time[0] + " BREAKEVEN: profit=" + unrealizedPnL.ToString("F2") + "pt");
+					Print(Time[0] + " BREAKEVEN ACTIVATED at " + unrealizedPnL.ToString("F2") + "pt profit");
 				}
 			}
 			else
@@ -76,21 +65,23 @@ namespace NinjaTrader.NinjaScript.Strategies
 			// LONG entry
 			if (buySignal && Position.MarketPosition == MarketPosition.Flat)
 			{
-				EntryLong(contractSize, "Long");
-				SetStopLoss(CalculationMode.Points, stopLossPoints);
-				SetProfitTarget(CalculationMode.Points, profitTargetPoints);
+				Buy("Long", contractSize);
+				SetStopLoss(CalculationMode.Ticks, 350);  // 87.5 points = 350 ticks
+				SetProfitTarget(CalculationMode.Ticks, 220);  // 44 points = 220 ticks (approximately)
 				entryPrice = Close[0];
 				breakEvenSet = false;
+				Print(Time[0] + " LONG entry at " + Close[0].ToString("F2"));
 			}
 
 			// SHORT entry
 			if (sellSignal && Position.MarketPosition == MarketPosition.Flat)
 			{
-				EntryShort(contractSize, "Short");
-				SetStopLoss(CalculationMode.Points, stopLossPoints);
-				SetProfitTarget(CalculationMode.Points, profitTargetPoints);
+				Sell("Short", contractSize);
+				SetStopLoss(CalculationMode.Ticks, 350);  // 87.5 points = 350 ticks
+				SetProfitTarget(CalculationMode.Ticks, 220);  // 44 points = 220 ticks
 				entryPrice = Close[0];
 				breakEvenSet = false;
+				Print(Time[0] + " SHORT entry at " + Close[0].ToString("F2"));
 			}
 		}
 
