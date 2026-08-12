@@ -20,13 +20,16 @@ namespace ISE.BacktestHarness
     {
         private readonly decimal _accountSize;
         private readonly string _outputDirectory;
+        private readonly string _instrument;
 
         public BacktestOrchestrator(
             decimal accountSize = 50000m,
-            string outputDirectory = "./backtest-results")
+            string outputDirectory = "./backtest-results",
+            string instrument = "MNQ")
         {
             _accountSize = accountSize;
             _outputDirectory = outputDirectory;
+            _instrument = instrument?.ToUpperInvariant() ?? "MNQ";
             System.IO.Directory.CreateDirectory(_outputDirectory);
         }
 
@@ -34,7 +37,7 @@ namespace ISE.BacktestHarness
         /// Run complete backtest suite with pre-loaded bars
         /// 
         /// Usage:
-        /// var orchestrator = new BacktestOrchestrator(50000m);
+        /// var orchestrator = new BacktestOrchestrator(50000m, "./results", "MGC");
         /// var bars = LoadBarsFromNinjaTrader(); // Your implementation
         /// orchestrator.Run(bars);
         /// </summary>
@@ -46,7 +49,7 @@ namespace ISE.BacktestHarness
                 throw new ArgumentException("Historical bars required.", nameof(historicalBars));
 
             Console.WriteLine($"\n{'='*60}");
-            Console.WriteLine($"  ISE-Elite Backtest Orchestrator");
+            Console.WriteLine($"  ISE-Elite Backtest Orchestrator ({_instrument})");
             Console.WriteLine($"{'='*60}");
             Console.WriteLine($"Account Size: ${_accountSize:F2}");
             Console.WriteLine($"Historical Bars: {historicalBars.Count:N0}");
@@ -57,10 +60,10 @@ namespace ISE.BacktestHarness
             var periodStart = historicalBars[0].TimestampUtc.UtcDateTime;
             var periodEnd = historicalBars[historicalBars.Count - 1].TimestampUtc.UtcDateTime;
 
-            // Step 1: Generate configurations
+            // Step 1: Generate configurations (instrument-specific)
             Console.WriteLine("STEP 1: Generating parameter configurations...");
             var sw = Stopwatch.StartNew();
-            var sweeper = new ConfigurationSweeper();
+            var sweeper = new ConfigurationSweeper(_instrument);
             var configs = sweeper.GenerateConfigurations();
             Console.WriteLine($"✅ Generated {configs.Count} configurations in {sw.ElapsedMilliseconds}ms\n");
 

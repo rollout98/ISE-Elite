@@ -107,7 +107,7 @@ namespace ISE.BacktestTools
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
                 var accountSize = 50000m;
-                var orchestrator = new BacktestOrchestrator(accountSize, "./backtest-results");
+                var orchestrator = new BacktestOrchestrator(accountSize, "./backtest-results", instrument);
 
                 orchestrator.Run(bars, signals);
 
@@ -121,9 +121,10 @@ namespace ISE.BacktestTools
                 Console.WriteLine($"✅ Results: ./backtest-results/backtest_results.csv");
                 Console.WriteLine($"\n📊 Next steps:");
                 Console.WriteLine($"   1. Open backtest_results.csv");
-                Console.WriteLine($"   2. Review top 20 configurations (Rank 1-20)");
-                Console.WriteLine($"   3. Look for Trades/Day in single digits");
-                Console.WriteLine($"   4. Check if P&L approaches $1,000/day\n");
+                Console.WriteLine($"   2. Find the best P&L for each (Contracts, Stop) pair");
+                Console.WriteLine($"   3. Look for which combo hits $500+/day");
+                Console.WriteLine($"   4. Verify win rate is reasonable (60%+)");
+                Console.WriteLine($"   5. Check if Trades/Day is in single digits\n");
             }
             catch (Exception ex)
             {
