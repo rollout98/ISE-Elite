@@ -118,6 +118,7 @@ namespace ISE.BacktestHarness.Engines
             // Answers the only question that matters here: does holding to the reversal
             // actually beat a fixed target on the same data?
             PrintExitModeComparison(allResults, 3);
+            PrintSurvivableSize(allResults);
             PrintDailyGoalComparison(allResults, 2);
             PrintDailyStopComparison(allResults, 3);
             PrintSessionBreakdown(allResults, 3);
@@ -176,6 +177,48 @@ namespace ISE.BacktestHarness.Engines
         /// profit would just rank by position size, so size is pinned and only the exit
         /// rule varies.
         /// </summary>
+        /// <summary>
+        /// Prop-firm EOD trailing drawdown limit. Breach it and the account is closed,
+        /// so any P&amp;L a config "earns" afterwards is fictional.
+        /// </summary>
+        private static readonly decimal AccountDrawdownLimit = 2000m;
+
+        /// <summary>
+        /// Largest contract count that survives the account limit, per exit mode. This
+        /// is the sizing question that actually matters: not what earns most, but what
+        /// keeps the worst closing-balance streak inside the threshold.
+        /// </summary>
+        private void PrintSurvivableSize(List<BacktestResult> results)
+        {
+            Console.WriteLine($"===== SURVIVABLE SIZE (EOD trailing DD limit ${AccountDrawdownLimit:F0}) =====\n");
+            Console.WriteLine("  MODE            MAXSIZE      GROSS   MED/DAY     EOD-DD   HEADROOM");
+
+            string ModeOf(BacktestResult r) =>
+                r.Config.HoldToReversal ? "REVERSAL"
+                : r.Config.UseTrailingStop ? "TRAIL"
+                : $"FIXED {r.Config.StopDistanceRisk * r.Config.AdaptiveRiskMultiplier:F0}pt";
+
+            foreach (var grp in results.GroupBy(ModeOf)
+                                       .OrderByDescending(g => g.Where(r => !r.AccountBlown(AccountDrawdownLimit))
+                                                                .Select(r => (decimal?)r.GrossProfit).Max() ?? decimal.MinValue)
+                                       .Take(8))
+            {
+                var survivor = grp.Where(r => !r.AccountBlown(AccountDrawdownLimit))
+                                  .OrderByDescending(r => r.GrossProfit)
+                                  .FirstOrDefault();
+                if (survivor == null)
+                {
+                    Console.WriteLine($"  {grp.Key,-14} {"NONE",7}   - no size survives -");
+                    continue;
+                }
+                Console.WriteLine(
+                    $"  {grp.Key,-14} {survivor.Config.MaximumContracts,7} {survivor.GrossProfit,10:F0} " +
+                    $"{survivor.MedianDailyPnL,9:F0} {survivor.EodTrailingDrawdown,10:F0} " +
+                    $"{AccountDrawdownLimit - survivor.EodTrailingDrawdown,10:F0}");
+            }
+            Console.WriteLine();
+        }
+
         private void PrintExitModeComparison(List<BacktestResult> results, int contractsToCompare)
         {
             var pool = results.Where(r => r.Config.MaximumContracts == contractsToCompare).ToList();
@@ -187,7 +230,7 @@ namespace ISE.BacktestHarness.Engines
                 : $"FIXED {r.Config.StopDistanceRisk * r.Config.AdaptiveRiskMultiplier:F0}pt";
 
             Console.WriteLine($"===== EXIT MODE COMPARISON (best config per mode, {contractsToCompare} contracts) =====\n");
-            Console.WriteLine("  MODE                 GROSS   MED/DAY   AVG/DAY   WIN%  TRADES  >=500      MAXDD");
+            Console.WriteLine("  MODE                 GROSS   MED/DAY   AVG/DAY   WIN%  TRADES  >=500     EOD-DD  ALIVE?");
 
             foreach (var g in pool.GroupBy(ModeOf)
                                   .Select(g => g.OrderByDescending(r => r.GrossProfit).First())
@@ -195,7 +238,8 @@ namespace ISE.BacktestHarness.Engines
             {
                 Console.WriteLine(
                     $"  {ModeOf(g),-14} {g.GrossProfit,11:F0} {g.MedianDailyPnL,9:F0} {g.AvgDailyPnL,9:F0} " +
-                    $"{g.WinRate,6:F1} {g.TotalTrades,7} {g.PctDaysAbove(500m),5:F0}% {g.MaxDrawdown,10:F0}");
+                    $"{g.WinRate,6:F1} {g.TotalTrades,7} {g.PctDaysAbove(500m),5:F0}% " +
+                    $"{g.EodTrailingDrawdown,10:F0}  {(g.AccountBlown(AccountDrawdownLimit) ? "DEAD" : "ok")}");
             }
             Console.WriteLine();
         }

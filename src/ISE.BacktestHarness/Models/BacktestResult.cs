@@ -106,6 +106,37 @@ namespace ISE.BacktestHarness.Models
         public int LosingDays => DailyPnL.Count(d => d < 0);
 
         /// <summary>
+        /// END-OF-DAY trailing drawdown - the measure prop firms actually enforce when
+        /// the threshold trails on closing balance rather than intraday equity.
+        /// The kill line follows the highest CLOSING balance, so an intraday dip that
+        /// recovers before the bell costs nothing. This is far smaller than MaxDrawdown
+        /// (which is intraday peak-to-trough) and is the number to size against.
+        /// The peak floors at 0 because the account starts at its high-water mark.
+        /// </summary>
+        public decimal EodTrailingDrawdown
+        {
+            get
+            {
+                decimal cum = 0m, peak = 0m, worst = 0m;
+                foreach (var day in DailyPnL)
+                {
+                    cum += day;
+                    if (cum > peak) peak = cum;
+                    var dd = peak - cum;
+                    if (dd > worst) worst = dd;
+                }
+                return worst;
+            }
+        }
+
+        /// <summary>
+        /// Would this configuration have killed the account? True if EOD trailing
+        /// drawdown ever exceeded the firm's threshold. A config that "earns" $50,000
+        /// after breaching this earned nothing - the account was already closed.
+        /// </summary>
+        public bool AccountBlown(decimal threshold) => EodTrailingDrawdown >= threshold;
+
+        /// <summary>
         /// Share of trading days clearing the target. This, not the average, is the
         /// answer to "can this make $500 a day?" - a strategy averaging $900 that
         /// clears $500 on only a third of days is not a $500/day strategy.
