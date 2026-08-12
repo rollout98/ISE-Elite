@@ -47,17 +47,33 @@ namespace ISE.BacktestHarness
                 
                 var headers = headerLine.Split(delimiter);
                 int timeIdx = Array.IndexOf(headers, "time");
-                int buyIdx = Array.IndexOf(headers, "Buy Signal");
-                if (buyIdx < 0) buyIdx = Array.IndexOf(headers, "BUY");  // fallback
-                int sellIdx = Array.IndexOf(headers, "Sell Signal");
-                if (sellIdx < 0) sellIdx = Array.IndexOf(headers, "SELL");  // fallback
 
-                if (timeIdx < 0 || (buyIdx < 0 && sellIdx < 0))
+                // VectorFlow draws its BUY/SELL labels at Pine lines 1389-1390 with
+                // plotshape() calls that have NO title= argument. TradingView auto-names
+                // untitled plots "Shapes", "Shapes.1", ... in export order, so those two
+                // columns ARE the signal - in that order, BUY then SELL.
+                //
+                // The columns literally named "Buy Signal"/"Sell Signal" belong to some
+                // OTHER indicator on the chart; that string appears nowhere in the
+                // VectorFlow source. Reading them fired at 13.2/day against VectorFlow's
+                // 6.15/day and produced runs of six consecutive BUYs, which a latched
+                // edge signal cannot do. Every backtest before this fix was driven by
+                // the wrong signal.
+                var buyColumn = Environment.GetEnvironmentVariable("ISE_SIGNAL_BUY_COL") ?? "Shapes";
+                var sellColumn = Environment.GetEnvironmentVariable("ISE_SIGNAL_SELL_COL") ?? "Shapes.1";
+
+                int buyIdx = Array.IndexOf(headers, buyColumn);
+                int sellIdx = Array.IndexOf(headers, sellColumn);
+
+                if (timeIdx < 0 || buyIdx < 0 || sellIdx < 0)
                 {
                     throw new InvalidOperationException(
-                        $"CSV missing required columns. Expected: time, (Buy Signal or BUY), (Sell Signal or SELL). " +
+                        $"CSV missing required columns. Need 'time', '{buyColumn}' (BUY), '{sellColumn}' (SELL). " +
+                        $"Override with ISE_SIGNAL_BUY_COL / ISE_SIGNAL_SELL_COL. " +
                         $"Found: {string.Join(", ", headers)}");
                 }
+
+                Console.WriteLine($"   Signal columns: BUY='{buyColumn}' SELL='{sellColumn}'");
 
                 string? line;
                 int lineNum = 1;
