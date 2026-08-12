@@ -92,6 +92,33 @@ namespace ISE.BacktestTools
                         {
                             signals = VectorFlowSignalLoader.LoadFromCsv(signalCsvPath);
                             Console.WriteLine();
+
+                            // Signal-level verification against the chart. Set
+                            // ISE_INSPECT_DATE=2026-06-22 to dump every fire the loader
+                            // read for that day, so it can be compared label-for-label
+                            // with TradingView. Timestamps are shown in BOTH UTC and CT
+                            // because the chart is CT and a timezone slip would look
+                            // exactly like a signal-mapping bug.
+                            var inspectDate = Environment.GetEnvironmentVariable("ISE_INSPECT_DATE");
+                            if (!string.IsNullOrWhiteSpace(inspectDate) && DateTime.TryParse(inspectDate, out var probeDay))
+                            {
+                                var ct = TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time");
+                                Console.WriteLine($"===== SIGNAL FIRES READ FOR {probeDay:yyyy-MM-dd} (compare to chart) =====");
+                                Console.WriteLine("   UTC TIME          CT TIME           SIGNAL");
+
+                                int shown = 0;
+                                foreach (var rec in signals.Where(r => r.Signal != "NONE"))
+                                {
+                                    var ctTime = TimeZoneInfo.ConvertTimeFromUtc(rec.TimestampUtc, ct);
+                                    // Match on CT date, since that is what the chart shows.
+                                    if (ctTime.Date != probeDay.Date) continue;
+                                    Console.WriteLine($"   {rec.TimestampUtc:yyyy-MM-dd HH:mm}  {ctTime:yyyy-MM-dd HH:mm}  {rec.Signal}");
+                                    shown++;
+                                }
+                                if (shown == 0)
+                                    Console.WriteLine("   (no fires read for that CT date)");
+                                Console.WriteLine($"   total: {shown} fires\n");
+                            }
                         }
                     }
                     catch (Exception ex)
