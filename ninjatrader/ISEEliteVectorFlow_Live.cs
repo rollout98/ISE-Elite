@@ -1,48 +1,76 @@
-#region Using declarations
 using System;
-using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using NinjaTrader.Cbi;
+using NinjaTrader.Instruments;
+using NinjaTrader.Core;
+using NinjaTrader.Core.FloatingPoint;
 using NinjaTrader.Data;
 using NinjaTrader.NinjaScript;
-#endregion
+
+// CORRECT VectorFlow V1-S NinjaScript Implementation
+// Based on: VectorFlow_Algo_V1-S-NQ-EXIT Pine v6
+// Date: August 12, 2026
+// Purpose: Trend-following system (not scalping) - hold until reversal
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
-	public class ISEEliteVectorFlowLive : Strategy
+	public class ISEEliteVectorFlowCORRECT : Strategy
 	{
-		// FTC + VIDYA parameters
-		private int ftcPeriod = 20;
-		private int atrPeriod = 14;
-		private int vidyaPeriod = 20;
-
-		// Entry parameters (locked from backtest)
-		private double stopLossPoints = 87.5;
-		private double profitTargetPoints = 44.0;
-		private double breakEvenMovePoints = 62.5;
-		private int contractSize = 4;
-
-		// State tracking
-		private bool breakEvenSet = false;
+		// ==========================================================================
+		// FTC PARAMETERS (Fundamental Trend Channel)
+		// ==========================================================================
+		private int ftcPeriod = 100;      // SMA lookback for trend
+		private int atrPeriod = 100;      // ATR lookback for channel width
+		
+		// ==========================================================================
+		// VIDYA PARAMETERS (Volatility-Adjusted EMA)
+		// ==========================================================================
+		private int vidyaPeriod = 20;     // EMA lookback for VIDYA
+		private int vidyaMomentum = 20;   // CMO momentum lookback
+		private int vidyaSmooth = 15;     // SMA smoothing of VIDYA
+		private int atrBandPeriod = 200;  // ATR for VIDYA band distance
+		private double bandDistance = 2.0; // Multiplier for band width
+		
+		// ==========================================================================
+		// POSITION MANAGEMENT PARAMETERS
+		// ==========================================================================
+		private double stopLossTicks = 87.5;     // 87.5 ticks = 21.875 points on MNQ
+		private int contracts = 4;
+		
+		// ==========================================================================
+		// STATE TRACKING (LATCHED)
+		// ==========================================================================
+		// FTC Trend: TRUE = bullish, FALSE = bearish
+		private bool ftcTrendLatch = false;
+		private bool prevFtcTrendLatch = false;
+		
+		// VIDYA Up: TRUE = above upper band, FALSE = below lower band
+		private bool vidyaUpLatch = false;
+		private bool prevVidyaUpLatch = false;
+		
+		// Position tracking
+		private bool inLongTrade = false;
+		private bool inShortTrade = false;
 		private double entryPrice = 0;
+		private double positionStopPrice = 0;
 		
-		// Previous alignment state (for edge detection)
-		private bool prevFtcVidyaLong = false;
-		private bool prevFtcVidyaShort = false;
+		// VIDYA rolling state
+		private double vidyaValue = 0;
+		private double prevVidyaValue = 0;
 		
-		// VIDYA state (rolling calculation)
-		private double prevVidya = 0;
+		// VIDYA smoothing buffer (track recent values for SMA)
+		private double[] vidyaSmoothBuffer = new double[20];
+		private int smoothBufferIndex = 0;
 		
-		// Alignment confirmation buffer (reduce false signals)
-		private int alignmentConfirmBars = 0;
-		private const int CONFIRM_THRESHOLD = 3;  // Require 3 consecutive bars of alignment
-
+		// ==========================================================================
+		// INITIALIZATION
+		// ==========================================================================
 		protected override void OnStateChange()
 		{
 			if (State == State.SetDefaults)
 			{
-				Description = "ISE Elite VectorFlow Live (Merged)";
-				Name = "ISEEliteVectorFlowLive";
+				Description = "ISE Elite - VectorFlow V1-S (CORRECT: Latched, Hold-Until-Reversal)";
+				Name = "ISEEliteVectorFlowCORRECT";
 				Calculate = Calculate.OnBarClose;
 				EntriesPerDirection = 1;
 				EntryHandling = EntryHandling.AllEntries;
@@ -54,201 +82,177 @@ namespace NinjaTrader.NinjaScript.Strategies
 			else if (State == State.Configure)
 			{
 				// Initialize VIDYA state
-				prevVidya = 0;
+				vidyaValue = Close[0];
 			}
 		}
 
+		// ==========================================================================
+		// MAIN SIGNAL GENERATION
+		// ==========================================================================
 		protected override void OnBarUpdate()
 		{
 			if (CurrentBar < ftcPeriod)
 				return;
 
-			// ========== SIGNAL GENERATION ==========
-			// Calculate FTC (Fundamental Trend Channel): SMA ± ATR
-			double sma = SMA(Close, ftcPeriod)[0];
-			double atr = ATR(Close, atrPeriod)[0];
-			double ftcUpper = sma + atr;
-			double ftcLower = sma - atr;
+			// Calculate FTC (Fundamental Trend Channel)
+			double smaFTC = SMA(Close, ftcPeriod)[0];
+			double atrFTC = ATR(Close, atrPeriod)[0];
+			double ftcUpper = smaFTC + atrFTC;
+			double ftcLower = smaFTC - atrFTC;
 
-			// Calculate VIDYA (adaptive EMA based on momentum ratio)
-			double vidya = CalculateVIDYA();
-
-			// Detect alignment: FTC and VIDYA point same direction
-			bool ftcVidyaLongAlign = (vidya > sma) && (Close[0] > ftcLower);  // Both bullish
-			bool ftcVidyaShortAlign = (vidya < sma) && (Close[0] < ftcUpper);  // Both bearish
-
-			// Alignment confirmation buffer: require alignment to hold for 3+ consecutive bars
-			// This reduces false signals from transient oscillations
-			if (ftcVidyaLongAlign || ftcVidyaShortAlign)
+			// ===== FTC TREND LATCH =====
+			// Becomes TRUE on crossover above upper band
+			if (Close[0] > ftcUpper && !ftcTrendLatch)
 			{
-				alignmentConfirmBars++;
+				ftcTrendLatch = true;
 			}
-			else
+			// Becomes FALSE on crossunder below lower band
+			else if (Close[0] < ftcLower && ftcTrendLatch)
 			{
-				alignmentConfirmBars = 0;
+				ftcTrendLatch = false;
 			}
 
-			// Generate buy/sell only if alignment has held for 3+ bars AND transitions
-			bool buySignal = ftcVidyaLongAlign && alignmentConfirmBars >= CONFIRM_THRESHOLD && !prevFtcVidyaLong;
-			bool sellSignal = ftcVidyaShortAlign && alignmentConfirmBars >= CONFIRM_THRESHOLD && !prevFtcVidyaShort;
+			// Calculate VIDYA with CMO-based adaptive alpha
+			vidyaValue = CalculateVIDYA();
+			
+			// Smooth VIDYA with manual SMA (simple moving average)
+			double vidyaSmoothed = CalculateSimpleMA(vidyaValue, vidyaSmooth);
+			
+			// Calculate VIDYA bands
+			double atrBands = ATR(Close, atrBandPeriod)[0];
+			double vidyaUpper = vidyaSmoothed + (bandDistance * atrBands);
+			double vidyaLower = vidyaSmoothed - (bandDistance * atrBands);
 
-			// Update state for next bar
-			prevFtcVidyaLong = ftcVidyaLongAlign;
-			prevFtcVidyaShort = ftcVidyaShortAlign;
-
-			// ========== BREAKEVEN LOGIC ==========
-			if (Position.MarketPosition == MarketPosition.Long && !breakEvenSet)
+			// ===== VIDYA UP LATCH =====
+			// Becomes TRUE on crossover above upper band
+			if (Close[0] > vidyaUpper && !vidyaUpLatch)
 			{
-				if (Close[0] > entryPrice + (breakEvenMovePoints * 0.25))
-				{
-					SetStopLoss(CalculationMode.Price, entryPrice);
-					breakEvenSet = true;
-					Print(Time[0] + " LONG BREAKEVEN at " + Close[0]);
-				}
+				vidyaUpLatch = true;
 			}
-			else if (Position.MarketPosition == MarketPosition.Short && !breakEvenSet)
+			// Becomes FALSE on crossunder below lower band
+			else if (Close[0] < vidyaLower && vidyaUpLatch)
 			{
-				if (Close[0] < entryPrice - (breakEvenMovePoints * 0.25))
-				{
-					SetStopLoss(CalculationMode.Price, entryPrice);
-					breakEvenSet = true;
-					Print(Time[0] + " SHORT BREAKEVEN at " + Close[0]);
-				}
-			}
-			else if (Position.MarketPosition == MarketPosition.Flat)
-			{
-				breakEvenSet = false;
+				vidyaUpLatch = false;
 			}
 
-			// ========== ENTRY LOGIC ==========
-			if (buySignal && Position.MarketPosition == MarketPosition.Flat)
+			// ==========================================================================
+			// SIGNAL DETECTION (LATCHED STATE ALIGNMENT)
+			// ==========================================================================
+			bool buyCondition = ftcTrendLatch && vidyaUpLatch;       // Both bullish
+			bool sellCondition = !ftcTrendLatch && !vidyaUpLatch;    // Both bearish
+			
+			// Track previous state for EDGE detection
+			bool prevBuyCondition = prevFtcTrendLatch && prevVidyaUpLatch;
+			bool prevSellCondition = !prevFtcTrendLatch && !prevVidyaUpLatch;
+			
+			// ===== ENTRY SIGNALS (EDGE TRIGGERED) =====
+			bool buyNow = buyCondition && !prevBuyCondition && Position.MarketPosition == MarketPosition.Flat;
+			bool sellNow = sellCondition && !prevSellCondition && Position.MarketPosition == MarketPosition.Flat;
+
+			// ==========================================================================
+			// ENTRY EXECUTION
+			// ==========================================================================
+			if (buyNow)
 			{
-				EnterLong(contractSize, "Long");
-				SetStopLoss(CalculationMode.Price, Close[0] - (stopLossPoints * 0.25));
-				SetProfitTarget(CalculationMode.Price, Close[0] + (profitTargetPoints * 0.25));
+				Print(Time[0] + " BUY SIGNAL at " + Close[0]);
+				EnterLong(contracts, "Long");
+				inLongTrade = true;
+				inShortTrade = false;
 				entryPrice = Close[0];
-				breakEvenSet = false;
-				Print(Time[0] + " LONG entry at " + Close[0] + " | Stop: " + (Close[0] - (stopLossPoints * 0.25)) + " | Target: " + (Close[0] + (profitTargetPoints * 0.25)));
+				positionStopPrice = Close[0] - (stopLossTicks * 0.25); // Convert ticks to points
+				SetStopLoss(CalculationMode.Price, positionStopPrice);
+			}
+			else if (sellNow)
+			{
+				Print(Time[0] + " SELL SIGNAL at " + Close[0]);
+				EnterShort(contracts, "Short");
+				inShortTrade = true;
+				inLongTrade = false;
+				entryPrice = Close[0];
+				positionStopPrice = Close[0] + (stopLossTicks * 0.25); // Convert ticks to points
+				SetStopLoss(CalculationMode.Price, positionStopPrice);
 			}
 
-			if (sellSignal && Position.MarketPosition == MarketPosition.Flat)
+			// ==========================================================================
+			// EXIT LOGIC (HOLD UNTIL REVERSAL)
+			// ==========================================================================
+			// Exit LONG when SELL signal fires (alignment reverses to bearish)
+			if (inLongTrade && sellNow)
 			{
-				EnterShort(contractSize, "Short");
-				SetStopLoss(CalculationMode.Price, Close[0] + (stopLossPoints * 0.25));
-				SetProfitTarget(CalculationMode.Price, Close[0] - (profitTargetPoints * 0.25));
-				entryPrice = Close[0];
-				breakEvenSet = false;
-				Print(Time[0] + " SHORT entry at " + Close[0] + " | Stop: " + (Close[0] + (stopLossPoints * 0.25)) + " | Target: " + (Close[0] - (profitTargetPoints * 0.25)));
+				Print(Time[0] + " EXIT LONG on SELL signal at " + Close[0]);
+				ExitLong();
+				inLongTrade = false;
 			}
+			
+			// Exit SHORT when BUY signal fires (alignment reverses to bullish)
+			if (inShortTrade && buyNow)
+			{
+				Print(Time[0] + " EXIT SHORT on BUY signal at " + Close[0]);
+				ExitShort();
+				inShortTrade = false;
+			}
+
+			// ==========================================================================
+			// UPDATE STATE FOR NEXT BAR
+			// ==========================================================================
+			prevFtcTrendLatch = ftcTrendLatch;
+			prevVidyaUpLatch = vidyaUpLatch;
+			prevVidyaValue = vidyaValue;
 		}
 
-		/// <summary>
-		/// Calculate VIDYA (Volatility Index Dynamic Average)
-		/// Uses momentum ratio to adaptively weight the EMA
-		/// </summary>
+		// ==========================================================================
+		// VIDYA CALCULATION (CMO-based adaptive EMA)
+		// ==========================================================================
 		private double CalculateVIDYA()
 		{
-			// On first bar, initialize to close
-			if (CurrentBar == 0)
-			{
-				prevVidya = Close[0];
+			if (CurrentBar < vidyaMomentum)
 				return Close[0];
-			}
-
-			// Momentum: current close relative to N periods ago
-			double momentum = Math.Abs(Close[0] - Close[Math.Min(vidyaPeriod, CurrentBar)]);
-			double sumAbsMomentum = 0;
-
-			// Sum of absolute price changes over last N periods
-			int lookback = Math.Min(vidyaPeriod, CurrentBar);
-			for (int i = 0; i < lookback; i++)
+			
+			// Calculate momentum sum (positive and negative)
+			double positiveSum = 0;
+			double negativeSum = 0;
+			
+			for (int i = 0; i < vidyaMomentum; i++)
 			{
-				sumAbsMomentum += Math.Abs(Close[i] - Close[i + 1]);
+				double change = Close[i] - Close[i + 1];
+				if (change >= 0)
+					positiveSum += change;
+				else
+					negativeSum += Math.Abs(change);
 			}
-
-			// Avoid division by zero
-			if (sumAbsMomentum == 0)
-				return prevVidya;
-
-			// Momentum ratio (0 to 1): how much momentum vs total volatility
-			double momentumRatio = momentum / sumAbsMomentum;
-			double baseAlpha = 2.0 / (vidyaPeriod + 1.0);
-
-			// Adaptive alpha: scale by momentum ratio
-			double adaptiveAlpha = baseAlpha * momentumRatio;
-
-			// EMA with adaptive alpha
-			double vidya = prevVidya + adaptiveAlpha * (Close[0] - prevVidya);
-			prevVidya = vidya;
-
-			return vidya;
+			
+			// Calculate CMO (Chande Momentum Oscillator)
+			double totalSum = positiveSum + negativeSum;
+			double cmo = totalSum > 0 ? Math.Abs(100 * (positiveSum - negativeSum) / totalSum) : 0;
+			
+			// Adaptive alpha based on CMO
+			double baseAlpha = 2.0 / (vidyaPeriod + 1);
+			double adaptiveAlpha = baseAlpha * (cmo / 100.0);
+			
+			// Update VIDYA with adaptive alpha
+			double newVIDYA = (adaptiveAlpha * Close[0]) + ((1 - adaptiveAlpha) * vidyaValue);
+			
+			return newVIDYA;
 		}
 
-		#region Properties
-
-		[NinjaScriptProperty]
-		[Range(5, 100)]
-		[Display(Name = "FTC Period", Order = 1, GroupName = "FTC Parameters")]
-		public int FtcPeriod
+		// ==========================================================================
+		// SIMPLE MOVING AVERAGE HELPER FOR VIDYA SMOOTHING
+		// ==========================================================================
+		private double CalculateSimpleMA(double newValue, int period)
 		{
-			get { return ftcPeriod; }
-			set { ftcPeriod = Math.Max(5, value); }
+			// Add new value to buffer (circular)
+			vidyaSmoothBuffer[smoothBufferIndex % period] = newValue;
+			smoothBufferIndex++;
+			
+			// Calculate average
+			double sum = 0;
+			int count = Math.Min(smoothBufferIndex, period);
+			for (int i = 0; i < count; i++)
+			{
+				sum += vidyaSmoothBuffer[i];
+			}
+			
+			return sum / count;
 		}
-
-		[NinjaScriptProperty]
-		[Range(5, 100)]
-		[Display(Name = "ATR Period", Order = 2, GroupName = "FTC Parameters")]
-		public int AtrPeriod
-		{
-			get { return atrPeriod; }
-			set { atrPeriod = Math.Max(5, value); }
-		}
-
-		[NinjaScriptProperty]
-		[Range(5, 100)]
-		[Display(Name = "VIDYA Period", Order = 3, GroupName = "Signal Parameters")]
-		public int VidyaPeriod
-		{
-			get { return vidyaPeriod; }
-			set { vidyaPeriod = Math.Max(5, value); }
-		}
-
-		[NinjaScriptProperty]
-		[Range(1, double.MaxValue)]
-		[Display(Name = "Stop Loss Points", Order = 1, GroupName = "Entry Parameters")]
-		public double StopLossPoints
-		{
-			get { return stopLossPoints; }
-			set { stopLossPoints = value; }
-		}
-
-		[NinjaScriptProperty]
-		[Range(1, double.MaxValue)]
-		[Display(Name = "Profit Target Points", Order = 2, GroupName = "Entry Parameters")]
-		public double ProfitTargetPoints
-		{
-			get { return profitTargetPoints; }
-			set { profitTargetPoints = value; }
-		}
-
-		[NinjaScriptProperty]
-		[Range(0, double.MaxValue)]
-		[Display(Name = "Breakeven Move Points", Order = 3, GroupName = "Entry Parameters")]
-		public double BreakEvenMovePoints
-		{
-			get { return breakEvenMovePoints; }
-			set { breakEvenMovePoints = value; }
-		}
-
-		[NinjaScriptProperty]
-		[Range(1, 10)]
-		[Display(Name = "Contract Size", Order = 4, GroupName = "Entry Parameters")]
-		public int ContractSize
-		{
-			get { return contractSize; }
-			set { contractSize = value; }
-		}
-
-		#endregion
 	}
 }
