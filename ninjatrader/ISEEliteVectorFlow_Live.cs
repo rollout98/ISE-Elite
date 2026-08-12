@@ -32,6 +32,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 		
 		// VIDYA state (rolling calculation)
 		private double prevVidya = 0;
+		
+		// Alignment confirmation buffer (reduce false signals)
+		private int alignmentConfirmBars = 0;
+		private const int CONFIRM_THRESHOLD = 3;  // Require 3 consecutive bars of alignment
 
 		protected override void OnStateChange()
 		{
@@ -73,9 +77,20 @@ namespace NinjaTrader.NinjaScript.Strategies
 			bool ftcVidyaLongAlign = (vidya > sma) && (Close[0] > ftcLower);  // Both bullish
 			bool ftcVidyaShortAlign = (vidya < sma) && (Close[0] < ftcUpper);  // Both bearish
 
-			// Generate buy/sell on alignment edge (transition from no-alignment to alignment)
-			bool buySignal = ftcVidyaLongAlign && !prevFtcVidyaLong;
-			bool sellSignal = ftcVidyaShortAlign && !prevFtcVidyaShort;
+			// Alignment confirmation buffer: require alignment to hold for 3+ consecutive bars
+			// This reduces false signals from transient oscillations
+			if (ftcVidyaLongAlign || ftcVidyaShortAlign)
+			{
+				alignmentConfirmBars++;
+			}
+			else
+			{
+				alignmentConfirmBars = 0;
+			}
+
+			// Generate buy/sell only if alignment has held for 3+ bars AND transitions
+			bool buySignal = ftcVidyaLongAlign && alignmentConfirmBars >= CONFIRM_THRESHOLD && !prevFtcVidyaLong;
+			bool sellSignal = ftcVidyaShortAlign && alignmentConfirmBars >= CONFIRM_THRESHOLD && !prevFtcVidyaShort;
 
 			// Update state for next bar
 			prevFtcVidyaLong = ftcVidyaLongAlign;
