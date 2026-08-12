@@ -112,6 +112,7 @@ namespace ISE.BacktestHarness.Engines
                             foreach (var floor in profitFloors)
                             foreach (var be in breakEvenMoves)
                             foreach (var dayStop in dailyLossLimits)
+                            foreach (var ladder in new[] { false, true })
                             {
                                 configs.Add(new BacktestConfiguration(
                                     configId: configId++,
@@ -124,7 +125,8 @@ namespace ISE.BacktestHarness.Engines
                                     breakEvenMovePoints: be,
                                     holdToReversal: true,
                                     profitFloorDollars: floor,
-                                    dailyLossLimitDollars: dayStop));
+                                    dailyLossLimitDollars: dayStop,
+                                    useSizeLadder: ladder));
                             }
 
                             // Arm 2: fixed profit target - the rule Devon actually

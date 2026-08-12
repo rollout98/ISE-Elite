@@ -121,6 +121,7 @@ namespace ISE.BacktestHarness.Engines
             PrintSurvivableSize(allResults);
             PrintDailyGoalComparison(allResults, 2);
             PrintLiveConfigCheck(allResults);
+            PrintLadderComparison(allResults);
             PrintDailyStopComparison(allResults, 3);
             PrintSessionBreakdown(allResults, 3);
 
@@ -451,6 +452,40 @@ namespace ISE.BacktestHarness.Engines
                     $"{r.GrossProfit,10:F0} {r.MedianDailyPnL,9:F0} " +
                     $"{r.WinRate,6:F1} {r.TotalTrades,7} {r.PctDaysAbove(500m),5:F0}% " +
                     $"{r.EodTrailingDrawdown,10:F0}  {(r.AccountBlown(AccountDrawdownLimit) ? "DEAD" : "ok")}");
+            }
+            Console.WriteLine();
+        }
+
+
+        /// <summary>
+        /// Hold-to-reversal with and without the anti-martingale ladder, at each start
+        /// size. The ladder is smallest during losing streaks, which is exactly when
+        /// EOD drawdown accumulates - so if the real method survives the account limit
+        /// anywhere, it survives here rather than in the flat-sized tables.
+        /// </summary>
+        private void PrintLadderComparison(List<BacktestResult> results)
+        {
+            var pool = results.Where(r => r.Config.HoldToReversal
+                                       && r.Config.ProfitFloorDollars == 0m
+                                       && r.Config.DailyLossLimitDollars == 0m
+                                       && r.Config.BreakevenMovePoints == 0).ToList();
+            if (pool.Count == 0) return;
+
+            Console.WriteLine("===== SIZE LADDER vs FLAT (hold to reversal) =====");
+            Console.WriteLine("  ladder: start at SIZE, -1 after a loss (floor 1), +1 after a win\n");
+            Console.WriteLine("  MODE    START      GROSS   MED/DAY  TRADES     EOD-DD  ALIVE?");
+
+            foreach (var ladder in new[] { false, true })
+            foreach (var size in new[] { 1, 2, 3, 4, 5 })
+            {
+                var best = pool.Where(r => r.Config.UseSizeLadder == ladder
+                                        && r.Config.MaximumContracts == size)
+                               .OrderByDescending(r => r.GrossProfit).FirstOrDefault();
+                if (best == null) continue;
+                Console.WriteLine(
+                    $"  {(ladder ? "LADDER" : "flat  "),-6} {size,5} {best.GrossProfit,10:F0} " +
+                    $"{best.MedianDailyPnL,9:F0} {best.TotalTrades,7} {best.EodTrailingDrawdown,10:F0}" +
+                    $"  {(best.AccountBlown(AccountDrawdownLimit) ? "DEAD" : "ok")}");
             }
             Console.WriteLine();
         }

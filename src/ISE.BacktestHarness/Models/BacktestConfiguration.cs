@@ -18,7 +18,8 @@ namespace ISE.BacktestHarness.Models
             decimal profitFloorDollars = 0m,
             decimal dailyLossLimitDollars = 0m,
             decimal dailyProfitTargetDollars = 0m,
-            bool usePaExit = false)
+            bool usePaExit = false,
+            bool useSizeLadder = false)
         {
             ConfigId = configId;
             MaximumContracts = maximumContracts;
@@ -33,6 +34,7 @@ namespace ISE.BacktestHarness.Models
             DailyLossLimitDollars = dailyLossLimitDollars;
             DailyProfitTargetDollars = dailyProfitTargetDollars;
             UsePaExit = usePaExit;
+            UseSizeLadder = useSizeLadder;
         }
 
         public int ConfigId { get; }
@@ -103,6 +105,15 @@ namespace ISE.BacktestHarness.Models
         /// </summary>
         public bool UsePaExit { get; }
 
+        /// <summary>
+        /// Anti-martingale position ladder: start at MaximumContracts, step DOWN one
+        /// after a losing trade (floor 1), step UP one after a winner (ceiling
+        /// MaximumContracts). This is how the account is actually traded - smallest
+        /// during losing streaks, which is precisely when drawdown accumulates - and
+        /// flat sizing therefore overstates the drawdown of the real method.
+        /// </summary>
+        public bool UseSizeLadder { get; }
+
         public override string ToString()
         {
             return $"Config{ConfigId}: Contracts={MaximumContracts}, " +
@@ -117,6 +128,7 @@ namespace ISE.BacktestHarness.Models
                    (DailyLossLimitDollars > 0 ? $", DayStop=${DailyLossLimitDollars:F0}" : "") +
                    (DailyProfitTargetDollars > 0 ? $", DayGoal=${DailyProfitTargetDollars:F0}" : "") +
                    (UsePaExit ? ", PAEXIT" : "") +
+                   (UseSizeLadder ? ", LADDER" : "") +
                    (TrendFilterBars > 0 ? $", Filter={TrendFilterBars}bar" : ", Filter=OFF") +
                    (BreakevenMovePoints > 0 ? $", BE={BreakevenMovePoints:F1}pt" : "");
         }

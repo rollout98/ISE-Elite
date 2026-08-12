@@ -66,6 +66,9 @@ namespace ISE.BacktestHarness.Engines
         private Dictionary<DateTime, (bool exitLong, bool exitShort)> _paExits
             = new Dictionary<DateTime, (bool, bool)>();
         private bool _usePaExit = false;
+        private bool _useSizeLadder = false;
+        private int _ladderSize = 1;      // current rung
+        private int _ladderMax = 1;       // ceiling = config.MaximumContracts
         private int _trendFilterBars = 0; // 0 = disabled
         private decimal _bestPrice = 0m; // best price reached in the trade's favour
         private double _breakEvenMovePoints = 0; // once profit reaches this, stop moves to entry
@@ -128,6 +131,9 @@ namespace ISE.BacktestHarness.Engines
             _dailyLossLimit = config.DailyLossLimitDollars;
             _dailyProfitTarget = config.DailyProfitTargetDollars;
             _usePaExit = config.UsePaExit && _paExits.Count > 0;
+            _useSizeLadder = config.UseSizeLadder;
+            _ladderMax = config.MaximumContracts;
+            _ladderSize = config.MaximumContracts;   // start at the top rung
             _currentTradingDay = DateTime.MinValue;
             _dayRealizedPnL = 0m;
             _dayHalted = false;
@@ -447,7 +453,8 @@ namespace ISE.BacktestHarness.Engines
             _activeDirection = direction;
             // No arbitrary cap. A previous Math.Min(maxContracts, 4) here made every
             // 5-contract config report identical results to its 4-contract twin.
-            _activeContracts = maxContracts;
+            _activeContracts = _useSizeLadder ? Math.Max(1, Math.Min(_ladderSize, maxContracts))
+                                             : maxContracts;
             _entryPrice = entryBar.Close;
             _entryTimeUtc = entryBar.TimestampUtc.UtcDateTime;
             _barsHeld = 0;
@@ -528,6 +535,14 @@ namespace ISE.BacktestHarness.Engines
             _trades.Add(trade);
 
             _currentEquity += pnl - slippage;
+
+            if (_useSizeLadder)
+            {
+                // Step down on a loss, up on a win. Scratches (breakeven exits) leave
+                // the rung alone - they are neither a signal to press nor to retreat.
+                if (pnl - slippage < 0m) _ladderSize = Math.Max(1, _ladderSize - 1);
+                else if (pnl - slippage > 0m) _ladderSize = Math.Min(_ladderMax, _ladderSize + 1);
+            }
 
             _dayRealizedPnL += pnl - slippage;
             if (_dailyLossLimit > 0 && _dayRealizedPnL <= -_dailyLossLimit)
