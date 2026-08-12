@@ -18,7 +18,11 @@ namespace ISE.BacktestHarness.Engines
         // MNQ tick = 0.25 pt = $0.50. One tick of slippage per side is realistic for a
         // liquid micro; $10/side (the previous value) implied 5 POINTS of slip per side
         // and was single-handedly responsible for the -409% result on 2026-08-11.
-        private readonly decimal _slippagePerContract = 0.50m;   // per side
+        // Slippage is ONE TICK per side, and a tick is not the same size on every
+        // instrument: MNQ is $0.50, MGC is $1.00. Hardcoding 0.50 understated gold's
+        // trading costs by half, which flatters small-target configs most - exactly
+        // the ones the scoring function likes.
+        private decimal _slippagePerContract = 0.50m;   // per side, set per instrument
         private readonly decimal _commissionPerContract = 0.37m; // per side, typical retail all-in
 
         // Position tracking
@@ -93,6 +97,7 @@ namespace ISE.BacktestHarness.Engines
             // Detect instrument and set correct point value
             var firstBar = bars.First();
             _pointValue = InstrumentSpecs.GetPointValue(firstBar.Instrument);
+            _slippagePerContract = InstrumentSpecs.GetTickSize(firstBar.Instrument) * _pointValue;
 
             // Wire the sweep parameters to actual trade geometry. Previously only
             // MaximumContracts was read, so all 420 configurations produced identical
