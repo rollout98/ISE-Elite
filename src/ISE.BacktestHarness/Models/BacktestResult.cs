@@ -75,7 +75,7 @@ namespace ISE.BacktestHarness.Models
             {
                 if (Trades.Count == 0) return System.Array.Empty<decimal>();
                 return Trades
-                    .GroupBy(t => t.ExitTimeUtc.Date)
+                    .GroupBy(t => t.TradingDay)
                     .OrderBy(g => g.Key)
                     .Select(g => g.Sum(t => t.PnL))
                     .ToList();

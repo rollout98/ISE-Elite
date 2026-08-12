@@ -16,7 +16,8 @@ namespace ISE.BacktestHarness.Models
             int contracts,
             decimal pnl,
             decimal slippage,
-            string exitReason = "UNKNOWN")
+            string exitReason = "UNKNOWN",
+            DateTime tradingDay = default)
         {
             EntryTimeUtc = entryTimeUtc;
             ExitTimeUtc = exitTimeUtc;
@@ -27,6 +28,7 @@ namespace ISE.BacktestHarness.Models
             PnL = pnl;
             Slippage = slippage;
             ExitReason = exitReason;
+            TradingDay = tradingDay == default ? exitTimeUtc.Date : tradingDay;
         }
 
         public DateTime EntryTimeUtc { get; }
@@ -46,5 +48,13 @@ namespace ISE.BacktestHarness.Models
         /// time-exit result wearing the same label.
         /// </summary>
         public string ExitReason { get; }
+
+        /// <summary>
+        /// Exchange trading day this trade CLOSED in, taken from the data feed's
+        /// tradingDay column. NOT the UTC calendar date: the futures session opens
+        /// 17:00 CT and UTC midnight falls at 19:00 CT, so grouping by UTC date files
+        /// the first two hours of every session under the previous day.
+        /// </summary>
+        public DateTime TradingDay { get; }
     }
 }

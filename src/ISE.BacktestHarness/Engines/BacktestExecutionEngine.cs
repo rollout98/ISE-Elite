@@ -454,7 +454,8 @@ namespace ISE.BacktestHarness.Engines
                 _activeContracts,
                 pnl,
                 slippage,
-                exitReason);
+                exitReason,
+                exitBar.TradingDay);
 
             _trades.Add(trade);
 

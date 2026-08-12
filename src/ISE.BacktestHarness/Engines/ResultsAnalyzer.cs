@@ -128,7 +128,7 @@ namespace ISE.BacktestHarness.Engines
                 // other, or one side being broken - both matter more than the total.
                 // Trades per day. One real trend a day means a healthy config should
                 // be in single digits - 72/day was the engine chasing noise.
-                var days = result.Trades.Select(t => t.EntryTimeUtc.Date).Distinct().Count();
+                var days = result.Trades.Select(t => t.TradingDay).Distinct().Count();
                 var perDay = days > 0 ? result.Trades.Count / (double)days : 0;
                 Console.WriteLine($"     {perDay,6:F1} trades/day over {days} days");
 
@@ -208,7 +208,7 @@ namespace ISE.BacktestHarness.Engines
             if (result.Trades.Count == 0) return;
 
             var byDay = result.Trades
-                .GroupBy(t => t.ExitTimeUtc.Date)
+                .GroupBy(t => t.TradingDay)
                 .Select(g => new { Day = g.Key, PnL = g.Sum(t => t.PnL - t.Slippage), Trades = g.OrderBy(t => t.EntryTimeUtc).ToList() })
                 .OrderBy(d => d.PnL)
                 .Take(dayCount);
