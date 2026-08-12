@@ -34,16 +34,23 @@ namespace ISE.BacktestTools
             Console.WriteLine("║      ISE-Elite Backtest Console Runner              ║");
             Console.WriteLine("╚════════════════════════════════════════════════════╝\n");
 
+            // Parse instrument from command line (default: MNQ)
+            string instrument = "MNQ";
+            if (args.Contains("--instrument") && args.Length > Array.IndexOf(args, "--instrument") + 1)
+            {
+                instrument = args[Array.IndexOf(args, "--instrument") + 1].ToUpperInvariant();
+            }
+
             var sw = Stopwatch.StartNew();
 
             try
             {
-                // Step 1: Load MNQ historical data
+                // Step 1: Load historical data (MNQ or MGC)
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                Console.WriteLine("STEP 1: Loading Historical Data (MNQ)");
+                Console.WriteLine($"STEP 1: Loading Historical Data ({instrument})");
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-                var bars = LoadHistoricalBars("MNQ");
+                var bars = LoadHistoricalBars(instrument);
                 if (bars == null || bars.Count == 0)
                 {
                     Console.WriteLine("❌ ERROR: No MNQ bars loaded.");
@@ -66,14 +73,14 @@ namespace ISE.BacktestTools
                 IReadOnlyList<VectorFlowSignalLoader.SignalRecord>? signals = null;
                 var signalCsvPath = Environment.GetEnvironmentVariable("ISE_SIGNALS");
                 if (string.IsNullOrWhiteSpace(signalCsvPath))
-                    signalCsvPath = Environment.GetEnvironmentVariable("ISE_SIGNALS_MNQ");
+                    signalCsvPath = Environment.GetEnvironmentVariable($"ISE_SIGNALS_{instrument}");
 
                 Console.WriteLine($"Signal CSV env var: {(string.IsNullOrWhiteSpace(signalCsvPath) ? "(not set)" : signalCsvPath)}\n");
 
                 if (!string.IsNullOrWhiteSpace(signalCsvPath))
                 {
                     Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                    Console.WriteLine("Loading External Signals (MNQ - VectorFlow CSV)");
+                    Console.WriteLine($"Loading External Signals ({instrument} - VectorFlow CSV)");
                     Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
                     try
                     {
