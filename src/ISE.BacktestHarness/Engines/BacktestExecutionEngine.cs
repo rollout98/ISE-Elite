@@ -44,6 +44,17 @@ namespace ISE.BacktestHarness.Engines
         private string _pendingExitReason = "";
         private decimal _dailyLossLimit = 0m;
         private decimal _dailyProfitTarget = 0m;
+        // Contract roll boundary. A stitched dataset splices two futures contracts
+        // that trade at different absolute prices (MNQ 06-26 closed 29,090 while
+        // 09-26 opened 29,323 - a 210pt step). A position held across the splice
+        // books that step as real P&L, which it is not. Flatten before it instead.
+        private static readonly DateTime? RollBoundaryUtc =
+            DateTime.TryParse(Environment.GetEnvironmentVariable("ISE_ROLL_BOUNDARY"),
+                              System.Globalization.CultureInfo.InvariantCulture,
+                              System.Globalization.DateTimeStyles.AdjustToUniversal |
+                              System.Globalization.DateTimeStyles.AssumeUniversal,
+                              out var _rb) ? _rb : (DateTime?)null;
+        private bool _rollHandled = false;
         private DateTime _currentTradingDay = DateTime.MinValue;
         private decimal _dayRealizedPnL = 0m;
         private bool _dayHalted = false;
@@ -113,6 +124,7 @@ namespace ISE.BacktestHarness.Engines
             _currentTradingDay = DateTime.MinValue;
             _dayRealizedPnL = 0m;
             _dayHalted = false;
+            _rollHandled = false;
             _trendFilterBars = config.TrendFilterBars;
             _breakEvenMovePoints = config.BreakevenMovePoints;
             _breakEvenActivated = false;
@@ -121,6 +133,20 @@ namespace ISE.BacktestHarness.Engines
 
             foreach (var bar in orderedBars)
             {
+                // Flatten across a stitched contract roll before anything else, so no
+                // trade can straddle the price discontinuity.
+                if (RollBoundaryUtc.HasValue && !_rollHandled
+                    && bar.TimestampUtc.UtcDateTime >= RollBoundaryUtc.Value)
+                {
+                    _rollHandled = true;
+                    if (_activeContracts > 0)
+                    {
+                        _pendingExitReason = "ROLL";
+                        ClosePosition(bar);
+                        continue;
+                    }
+                }
+
                 // Roll the trading day first. TradingDay comes from the data feed, so
                 // the session boundary is the exchange's, not UTC midnight cutting the
                 // overnight session in half.
