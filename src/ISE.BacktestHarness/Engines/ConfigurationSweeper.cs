@@ -131,10 +131,13 @@ namespace ISE.BacktestHarness.Engines
                             // trades - crossed with the daily profit halt and the
                             // breakeven move, so "close at TP" and "stop at $500 for
                             // the day" are measured together rather than assumed.
+                            // Crossed with PA exit on/off so the effect of the structure
+                            // -break exit is isolated against an otherwise identical config.
                             foreach (var risk in riskMultipliers)
                             foreach (var dayGoal in dailyProfitTargets)
                             foreach (var be in breakEvenMoves)
                             foreach (var dayStop in dailyLossLimits)
+                            foreach (var paExit in new[] { false, true })
                             {
                                 configs.Add(new BacktestConfiguration(
                                     configId: configId++,
@@ -148,7 +151,8 @@ namespace ISE.BacktestHarness.Engines
                                     holdToReversal: false,
                                     profitFloorDollars: 0m,
                                     dailyLossLimitDollars: dayStop,
-                                    dailyProfitTargetDollars: dayGoal));
+                                    dailyProfitTargetDollars: dayGoal,
+                                    usePaExit: paExit));
                             }
 
                             // Arm 3: trailing stop (riskMultiplier is unread here)

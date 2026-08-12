@@ -17,7 +17,8 @@ namespace ISE.BacktestHarness.Models
             bool holdToReversal = false,
             decimal profitFloorDollars = 0m,
             decimal dailyLossLimitDollars = 0m,
-            decimal dailyProfitTargetDollars = 0m)
+            decimal dailyProfitTargetDollars = 0m,
+            bool usePaExit = false)
         {
             ConfigId = configId;
             MaximumContracts = maximumContracts;
@@ -31,6 +32,7 @@ namespace ISE.BacktestHarness.Models
             ProfitFloorDollars = profitFloorDollars;
             DailyLossLimitDollars = dailyLossLimitDollars;
             DailyProfitTargetDollars = dailyProfitTargetDollars;
+            UsePaExit = usePaExit;
         }
 
         public int ConfigId { get; }
@@ -94,6 +96,13 @@ namespace ISE.BacktestHarness.Models
         /// </summary>
         public decimal DailyProfitTargetDollars { get; }
 
+        /// <summary>
+        /// Close on the PA structure-break marker (the purple EXIT label) when it fires
+        /// for the held direction, in addition to stop and target. This is a THIRD exit
+        /// path that the engine ignored entirely until now.
+        /// </summary>
+        public bool UsePaExit { get; }
+
         public override string ToString()
         {
             return $"Config{ConfigId}: Contracts={MaximumContracts}, " +
@@ -107,6 +116,7 @@ namespace ISE.BacktestHarness.Models
                    (ProfitFloorDollars > 0 ? $", Floor=${ProfitFloorDollars:F0}" : "") +
                    (DailyLossLimitDollars > 0 ? $", DayStop=${DailyLossLimitDollars:F0}" : "") +
                    (DailyProfitTargetDollars > 0 ? $", DayGoal=${DailyProfitTargetDollars:F0}" : "") +
+                   (UsePaExit ? ", PAEXIT" : "") +
                    (TrendFilterBars > 0 ? $", Filter={TrendFilterBars}bar" : ", Filter=OFF") +
                    (BreakevenMovePoints > 0 ? $", BE={BreakevenMovePoints:F1}pt" : "");
         }

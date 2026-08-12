@@ -60,6 +60,12 @@ namespace ISE.BacktestHarness.Engines
         private bool _dayHalted = false;
         private decimal _lockedFloorPrice = 0m;
         private Dictionary<DateTime, string> _externalSignals = new Dictionary<DateTime, string>();
+        // PA structure-break exits, keyed by bar. Separate from _externalSignals because
+        // an exit can land on a bar that carries no entry signal, and it is
+        // direction-specific: a "long exit" must not close a short.
+        private Dictionary<DateTime, (bool exitLong, bool exitShort)> _paExits
+            = new Dictionary<DateTime, (bool, bool)>();
+        private bool _usePaExit = false;
         private int _trendFilterBars = 0; // 0 = disabled
         private decimal _bestPrice = 0m; // best price reached in the trade's favour
         private double _breakEvenMovePoints = 0; // once profit reaches this, stop moves to entry
@@ -121,6 +127,7 @@ namespace ISE.BacktestHarness.Engines
             _profitFloorDollars = config.ProfitFloorDollars;
             _dailyLossLimit = config.DailyLossLimitDollars;
             _dailyProfitTarget = config.DailyProfitTargetDollars;
+            _usePaExit = config.UsePaExit && _paExits.Count > 0;
             _currentTradingDay = DateTime.MinValue;
             _dayRealizedPnL = 0m;
             _dayHalted = false;
@@ -204,6 +211,21 @@ namespace ISE.BacktestHarness.Engines
                     }
                 }
 
+                // PA structure-break exit. Checked before entries so a bar carrying
+                // both an exit and a fresh signal closes first, and only closes a
+                // position whose direction matches the marker.
+                if (_usePaExit && _activeContracts > 0
+                    && _paExits.TryGetValue(bar.TimestampUtc.UtcDateTime, out var pax))
+                {
+                    if ((_activeDirection == "LONG" && pax.exitLong) ||
+                        (_activeDirection == "SHORT" && pax.exitShort))
+                    {
+                        _pendingExitReason = "PAEXIT";
+                        ClosePosition(bar);
+                        continue;
+                    }
+                }
+
                 if (signal == "BUY" && _activeContracts == 0)
                 {
                     OpenPosition(bar, "LONG", config.MaximumContracts);
@@ -247,6 +269,19 @@ namespace ISE.BacktestHarness.Engines
         /// GenerateSignal() will read from this dictionary instead of computing
         /// crossovers. Keys are bar timestamps (UTC), values are "BUY", "SELL", "NONE".
         /// </summary>
+        /// <summary>
+        /// Load PA structure-break exits alongside the entry signals. Optional: if the
+        /// export has no PA columns this is never called and the engine behaves exactly
+        /// as before.
+        /// </summary>
+        public void LoadPaExits(IEnumerable<(DateTime timestamp, bool exitLong, bool exitShort)> exits)
+        {
+            _paExits.Clear();
+            foreach (var (ts, el, es) in exits)
+                if (el || es) _paExits[ts] = (el, es);
+            Console.WriteLine($"   Loaded {_paExits.Count} PA exit markers");
+        }
+
         public void LoadExternalSignals(IEnumerable<(DateTime timestamp, string signal)> signals)
         {
             _externalSignals.Clear();

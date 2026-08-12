@@ -436,18 +436,19 @@ namespace ISE.BacktestHarness.Engines
                     Math.Abs(r.Config.AdaptiveRiskMultiplier - 4.0) < 0.01 &&
                     Math.Abs(r.Config.BreakevenMovePoints - 75.0) < 0.01 &&
                     r.Config.DailyLossLimitDollars == 0m)
-                .GroupBy(r => r.Config.MaximumContracts)
-                .Select(g => g.OrderByDescending(r => r.GrossProfit).First())
                 .OrderBy(r => r.Config.MaximumContracts)
                 .ToList();
             if (live.Count == 0) return;
 
             Console.WriteLine("===== LIVE CONFIG: 100pt stop / 400pt target / BE at 75pt =====\n");
-            Console.WriteLine("  SIZE      GROSS   MED/DAY   WIN%  TRADES  >=500     EOD-DD  ALIVE?");
-            foreach (var r in live)
+            Console.WriteLine("  PAEXIT  SIZE      GROSS   MED/DAY   WIN%  TRADES  >=500     EOD-DD  ALIVE?");
+            foreach (var r in live.OrderBy(r => r.Config.UsePaExit)
+                                  .ThenBy(r => r.Config.MaximumContracts))
             {
+                if (r.Config.MaximumContracts > 4) continue;  // keep the table readable
                 Console.WriteLine(
-                    $"  {r.Config.MaximumContracts,4} {r.GrossProfit,10:F0} {r.MedianDailyPnL,9:F0} " +
+                    $"  {(r.Config.UsePaExit ? "ON " : "off"),-6} {r.Config.MaximumContracts,4} " +
+                    $"{r.GrossProfit,10:F0} {r.MedianDailyPnL,9:F0} " +
                     $"{r.WinRate,6:F1} {r.TotalTrades,7} {r.PctDaysAbove(500m),5:F0}% " +
                     $"{r.EodTrailingDrawdown,10:F0}  {(r.AccountBlown(AccountDrawdownLimit) ? "DEAD" : "ok")}");
             }

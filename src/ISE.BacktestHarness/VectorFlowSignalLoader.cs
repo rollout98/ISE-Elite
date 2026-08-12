@@ -15,6 +15,12 @@ namespace ISE.BacktestHarness
         {
             public DateTime TimestampUtc { get; set; }
             public string Signal { get; set; } = "NONE"; // "BUY", "SELL", or "NONE"
+
+            /// <summary>PA structure-break exit fired for a LONG position on this bar.</summary>
+            public bool ExitLong { get; set; }
+
+            /// <summary>PA structure-break exit fired for a SHORT position on this bar.</summary>
+            public bool ExitShort { get; set; }
         }
 
         /// <summary>
@@ -81,7 +87,19 @@ namespace ISE.BacktestHarness
                         $"Found: {string.Join(", ", headers)}");
                 }
 
+                // PA structure-break exit markers - the purple EXIT labels on the chart.
+                // These are a THIRD exit type alongside stop and target, and ignoring
+                // them made every backtest hold trades far longer than they are held in
+                // practice. Optional: absent columns simply disable the exit mode.
+                var exitLongColumn = Environment.GetEnvironmentVariable("ISE_EXIT_LONG_COL") ?? "PA Exit Long (Small)";
+                var exitShortColumn = Environment.GetEnvironmentVariable("ISE_EXIT_SHORT_COL") ?? "PA Exit Short (Small)";
+                int exitLongIdx = Array.IndexOf(headers, exitLongColumn);
+                int exitShortIdx = Array.IndexOf(headers, exitShortColumn);
+
                 Console.WriteLine($"   Signal columns: BUY='{buyColumn}'[{buyIdx}] SELL='{sellColumn}'[{sellIdx}]");
+                Console.WriteLine(exitLongIdx >= 0 && exitShortIdx >= 0
+                    ? $"   Exit columns:   LONG='{exitLongColumn}'[{exitLongIdx}] SHORT='{exitShortColumn}'[{exitShortIdx}]"
+                    : "   Exit columns:   not found - PA exit mode unavailable for this file");
 
                 string? line;
                 int lineNum = 1;
@@ -108,7 +126,17 @@ namespace ISE.BacktestHarness
                     else if (sellIdx >= 0 && !string.IsNullOrWhiteSpace(fields[sellIdx]) && fields[sellIdx] != "0")
                         signal = "SELL";
 
-                    records.Add(new SignalRecord { TimestampUtc = utc, Signal = signal });
+                    bool Fired(int idx) =>
+                        idx >= 0 && idx < fields.Length &&
+                        !string.IsNullOrWhiteSpace(fields[idx]) && fields[idx] != "0" &&
+                        !fields[idx].Equals("NaN", StringComparison.OrdinalIgnoreCase);
+
+                    records.Add(new SignalRecord {
+                        TimestampUtc = utc,
+                        Signal = signal,
+                        ExitLong = Fired(exitLongIdx),
+                        ExitShort = Fired(exitShortIdx)
+                    });
                 }
             }
 

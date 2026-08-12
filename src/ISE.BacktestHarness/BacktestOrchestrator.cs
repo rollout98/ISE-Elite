@@ -77,6 +77,7 @@ namespace ISE.BacktestHarness
             {
                 var signalTuples = externalSignals.Select(sr => (sr.TimestampUtc, sr.Signal));
                 engine.LoadExternalSignals(signalTuples);
+                engine.LoadPaExits(externalSignals.Select(sr => (sr.TimestampUtc, sr.ExitLong, sr.ExitShort)));
                 Console.WriteLine($"✅ Engine loaded {externalSignals.Count} external signals\n");
             }
 
