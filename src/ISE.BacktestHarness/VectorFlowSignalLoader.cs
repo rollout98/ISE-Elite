@@ -60,20 +60,28 @@ namespace ISE.BacktestHarness
                 // edge signal cannot do. Every backtest before this fix was driven by
                 // the wrong signal.
                 var buyColumn = Environment.GetEnvironmentVariable("ISE_SIGNAL_BUY_COL") ?? "Shapes";
-                var sellColumn = Environment.GetEnvironmentVariable("ISE_SIGNAL_SELL_COL") ?? "Shapes.1";
+                var sellColumn = Environment.GetEnvironmentVariable("ISE_SIGNAL_SELL_COL") ?? "Shapes";
 
+                // TradingView emits BOTH untitled plots under the IDENTICAL header
+                // "Shapes" - the CSV really does contain two columns with the same name.
+                // (Pandas silently renames the second to "Shapes.1"; the raw file does
+                // not, which is why looking up "Shapes.1" found nothing.) Resolve by
+                // OCCURRENCE: first is BUY (Pine line 1389), second is SELL (line 1390).
                 int buyIdx = Array.IndexOf(headers, buyColumn);
-                int sellIdx = Array.IndexOf(headers, sellColumn);
+                int sellIdx = (buyColumn == sellColumn)
+                    ? (buyIdx >= 0 ? Array.IndexOf(headers, sellColumn, buyIdx + 1) : -1)
+                    : Array.IndexOf(headers, sellColumn);
 
                 if (timeIdx < 0 || buyIdx < 0 || sellIdx < 0)
                 {
                     throw new InvalidOperationException(
-                        $"CSV missing required columns. Need 'time', '{buyColumn}' (BUY), '{sellColumn}' (SELL). " +
+                        $"CSV missing required columns. Need 'time', plus two occurrences of " +
+                        $"'{buyColumn}' (1st = BUY, 2nd = SELL). Resolved buyIdx={buyIdx}, sellIdx={sellIdx}. " +
                         $"Override with ISE_SIGNAL_BUY_COL / ISE_SIGNAL_SELL_COL. " +
                         $"Found: {string.Join(", ", headers)}");
                 }
 
-                Console.WriteLine($"   Signal columns: BUY='{buyColumn}' SELL='{sellColumn}'");
+                Console.WriteLine($"   Signal columns: BUY='{buyColumn}'[{buyIdx}] SELL='{sellColumn}'[{sellIdx}]");
 
                 string? line;
                 int lineNum = 1;

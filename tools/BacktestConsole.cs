@@ -96,8 +96,16 @@ namespace ISE.BacktestTools
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"❌ ERROR: Could not load signal CSV: {ex.Message}");
-                        Console.WriteLine("   Proceeding with computed signals (5/10 MA crossover)\n");
+                        // ABORT. Falling back to the built-in 5/10 MA crossover silently
+                        // swapped in a completely different strategy and then ranked 1,620
+                        // configs of it under a VectorFlow heading. A failed signal load
+                        // must stop the run, not quietly produce plausible-looking numbers
+                        // for something nobody asked to test.
+                        Console.WriteLine($"\n❌ FATAL: Could not load signal CSV: {ex.Message}\n");
+                        Console.WriteLine("   Refusing to fall back to the built-in MA crossover -");
+                        Console.WriteLine("   that is a different strategy and its results would be misleading.");
+                        Console.WriteLine("   Fix the signal file or column mapping and re-run.\n");
+                        Environment.Exit(1);
                     }
                 }
 
