@@ -86,7 +86,14 @@ namespace ISE.BacktestTools
                     {
                         if (!File.Exists(signalCsvPath))
                         {
-                            Console.WriteLine($"❌ ERROR: Signal file not found: {signalCsvPath}\n");
+                            // ABORT, same as a parse failure. A missing file previously
+                            // printed an error and then silently ran the whole sweep on
+                            // the built-in MA crossover, producing a full results table
+                            // for a strategy nobody asked to test.
+                            Console.WriteLine($"\n❌ FATAL: Signal file not found: {signalCsvPath}\n");
+                            Console.WriteLine("   ISE_SIGNALS was set but the file is not there.");
+                            Console.WriteLine("   Refusing to fall back to the built-in MA crossover.\n");
+                            Environment.Exit(1);
                         }
                         else
                         {
@@ -140,6 +147,20 @@ namespace ISE.BacktestTools
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
                 Console.WriteLine("STEP 2: Running Backtest (parameter sweep)");
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+                // Final gate. Every catastrophic run in this project shared one shape:
+                // signals failed to load, the engine fell back to its built-in 5/10 MA
+                // crossover, and a full ranked results table came out looking entirely
+                // plausible. There is no legitimate reason to sweep without VectorFlow
+                // signals, so refuse rather than produce another convincing fiction.
+                if (signals == null || signals.Count == 0)
+                {
+                    Console.WriteLine("\n❌ FATAL: No VectorFlow signals loaded.\n");
+                    Console.WriteLine("   Set ISE_SIGNALS to a TradingView export containing the");
+                    Console.WriteLine("   two untitled 'Shapes' columns (1st = BUY, 2nd = SELL).");
+                    Console.WriteLine("   The built-in MA crossover is NOT the strategy under test.\n");
+                    Environment.Exit(1);
+                }
 
                 var accountSize = 50000m;
                 var orchestrator = new BacktestOrchestrator(accountSize, "./backtest-results", instrument);
