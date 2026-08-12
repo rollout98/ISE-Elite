@@ -2,14 +2,6 @@
 using System;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using Cbi;
-using Ninja.Cbi;
-using Ninja.Cbi.Toolbox;
-using Ninja.Charts;
-using Ninja.Cbi.EventArgs;
-using Ninja.Cbi.Indicators;
-using Ninja.Charts.Tools;
 using NinjaTrader.Cbi;
 using NinjaTrader.Instruments;
 using NinjaTrader.Core;
@@ -18,7 +10,6 @@ using NinjaTrader.Data;
 using NinjaTrader.NinjaScript;
 using NinjaTrader.Core.Tools;
 using NinjaTrader.Windows;
-using NinjaTrader.Windows.Tools;
 #endregion
 
 namespace NinjaTrader.NinjaScript.Strategies
@@ -38,9 +29,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 	/// - Win rate: 82.3%
 	/// - Trades/day: 5.8
 	/// - Max DD: $7,407
-	/// 
-	/// IMPORTANT: This strategy requires the VectorFlow indicator to be loaded on the chart.
-	/// The indicator must plot Buy Signal (1 on bars where Buy fires) and Sell Signal columns.
 	/// </summary>
 	public class ISEEliteVectorFlowLive : Strategy
 	{
@@ -50,162 +38,133 @@ namespace NinjaTrader.NinjaScript.Strategies
 		private int contractSize = 4;              // 4 contracts per entry
 
 		private bool breakEvenSet = false;         // Flag to prevent re-triggering BE logic
-		private decimal entryPrice = 0m;           // Track entry for BE calculation
-		private int barsInTrade = 0;               // How many bars since entry
+		private double entryPrice = 0;             // Track entry for BE calculation
 
 		protected override void OnStateChange()
 		{
 			if (State == State.SetDefaults)
 			{
-				Description									= @"ISE Elite VectorFlow Live - Backtest validated strategy";
-				Name										= "ISEEliteVectorFlowLive";
-				Calculate									= Calculate.OnBarClose;
-				EntriesPerDirection							= 1;
-				EntryHandling								= EntryHandling.AllEntries;
-				IsExitOnSessionCloseStrategy				= false;
-				ExitOnSessionCloseSeconds					= 300;
-				IsFillLimitOnClose							= false;
-				AllowMultipleDefaultDocumentTypes			= false;
-				TraceOrders									= false;
-				RealtimeErrorHandling						= RealtimeErrorHandling.StopCancelCloseAnyTradingPosition;
-				StopTargetHandling							= StopTargetHandling.PerEntryExecution;
-				BarsRequiredToTrade							= 0;
-				// Disable default stop/target; we'll set them with SetStopLoss/SetProfitTarget
-				IsInstantiatedOnChart						= true;
-				IsAutoSync									= true;
+				Description = "ISE Elite VectorFlow Live - Backtest validated strategy ($906/day target)";
+				Name = "ISEEliteVectorFlowLive";
+				Calculate = Calculate.OnBarClose;
+				EntriesPerDirection = 1;
+				EntryHandling = EntryHandling.AllEntries;
+				IsExitOnSessionCloseStrategy = false;
+				ExitOnSessionCloseSeconds = 300;
+				IsFillLimitOnClose = false;
+				AllowMultipleDefaultDocumentTypes = false;
+				TraceOrders = false;
+				RealtimeErrorHandling = RealtimeErrorHandling.StopCancelCloseAnyTradingPosition;
+				StopTargetHandling = StopTargetHandling.PerEntryExecution;
+				BarsRequiredToTrade = 0;
+				IsInstantiatedOnChart = true;
+				IsAutoSync = true;
 			}
 			else if (State == State.Configure)
 			{
-				AddPlot(Brushes.White, "Position PnL");
+				// Optional: add a plot to track position P&L
+				AddPlot(Brushes.White, "PositionPnL");
 			}
 		}
 
 		protected override void OnBarUpdate()
 		{
-			// Early exit if we don't have enough bars
 			if (CurrentBar < 1)
 				return;
 
-			// Track position P&L for diagnostics
+			// Track position state and apply breakeven logic
 			if (Position.MarketPosition != MarketPosition.Flat)
 			{
-				barsInTrade++;
-				PlotValues[0][0] = Position.GetUnrealizedProfitLoss(Close[0], PerformanceUnit.Points);
+				// Get unrealized P&L in points
+				double unrealizedPnL = Position.GetUnrealizedProfitLoss(Close[0], PerformanceUnit.Points);
+				PlotValues[0][0] = unrealizedPnL;
 
 				// Breakeven logic: once profit reaches threshold, move stop to entry (zero risk)
-				if (!breakEvenSet && Position.GetUnrealizedProfitLoss(Close[0], PerformanceUnit.Points) >= breakEvenMovePoints)
+				if (!breakEvenSet && unrealizedPnL >= breakEvenMovePoints)
 				{
-					SetStopLoss(CalculationMode.Points, 0);  // Stop at entry price
+					// Move stop to entry price (breakeven)
+					SetStopLoss(CalculationMode.Price, entryPrice);
 					breakEvenSet = true;
-					Print($"{Time[0]} {Instrument.Name} BREAKEVEN ACTIVATED: {Position.GetUnrealizedProfitLoss(Close[0], PerformanceUnit.Points):F2}pt profit, stop moved to entry {entryPrice}");
+					Print(Time[0] + " BREAKEVEN: profit=" + unrealizedPnL.ToString("F2") + "pt, stop moved to entry=" + entryPrice.ToString("F2"));
 				}
 			}
 			else
 			{
-				barsInTrade = 0;
+				// Position closed, reset breakeven flag
 				breakEvenSet = false;
 			}
 
-			// Read Buy Signal and Sell Signal columns from VectorFlow indicator
-			// These are typically 1 (signal fired) or 0/blank (no signal)
-			// Indicator must be on the chart and plotting these columns
-			
-			// LONG entry: Buy Signal column = 1
-			if (Close[0] > 0)  // Only trade if price is positive (sanity check)
+			// ENTRY SIGNALS
+			// TODO: Wire these to your VectorFlow indicator's Buy Signal and Sell Signal columns
+			// Example: bool buySignal = (someIndicator.BuySignal[0] == 1);
+			bool buySignal = false;
+			bool sellSignal = false;
+
+			// LONG entry
+			if (buySignal && Position.MarketPosition == MarketPosition.Flat)
 			{
-				// Check for buy signal from VectorFlow
-				// The exact column name depends on your VectorFlow indicator plot
-				// Common names: "BuySignal", "Buy Signal", or similar
-				
-				// For now, we'll use a placeholder pattern. 
-				// In live, this gets wired to the actual VectorFlow column value.
-				bool buySignal = false;  // TODO: Wire to VectorFlow Buy Signal column
-				
-				if (buySignal && Position.MarketPosition == MarketPosition.Flat)
-				{
-					EntryLong(contractSize, "VFL_Long");
-					SetStopLoss(CalculationMode.Points, stopLossPoints);      // 87.5pt stop
-					SetProfitTarget(CalculationMode.Points, profitTargetPoints);  // 44pt target
-					entryPrice = Close[0];
-					breakEvenSet = false;
-					Print($"{Time[0]} LONG entry: {Close[0]}, stop {Close[0] - (decimal)stopLossPoints}, target {Close[0] + (decimal)profitTargetPoints}");
-				}
+				EntryLong(contractSize, "VFL_Long");
+				SetStopLoss(CalculationMode.Points, stopLossPoints);
+				SetProfitTarget(CalculationMode.Points, profitTargetPoints);
+				entryPrice = Close[0];
+				breakEvenSet = false;
+				Print(Time[0] + " LONG: entry=" + Close[0].ToString("F2") + 
+					  " stop=" + (Close[0] - stopLossPoints).ToString("F2") + 
+					  " target=" + (Close[0] + profitTargetPoints).ToString("F2"));
 			}
 
-			// SHORT entry: Sell Signal column = 1
-			if (Close[0] > 0)
+			// SHORT entry
+			if (sellSignal && Position.MarketPosition == MarketPosition.Flat)
 			{
-				bool sellSignal = false;  // TODO: Wire to VectorFlow Sell Signal column
-				
-				if (sellSignal && Position.MarketPosition == MarketPosition.Flat)
-				{
-					EntryShort(contractSize, "VFL_Short");
-					SetStopLoss(CalculationMode.Points, stopLossPoints);      // 87.5pt stop
-					SetProfitTarget(CalculationMode.Points, profitTargetPoints);  // 44pt target
-					entryPrice = Close[0];
-					breakEvenSet = false;
-					Print($"{Time[0]} SHORT entry: {Close[0]}, stop {Close[0] + (decimal)stopLossPoints}, target {Close[0] - (decimal)profitTargetPoints}");
-				}
-			}
-		}
-
-		protected override void OnOrderUpdate(Order order, double limitPrice, double stopPrice, int quantity, int filled, double averageFillPrice, OrderState orderState, DateTime time, ErrorCode errorCode, string nativeErrorCode)
-		{
-			// Log order updates for debugging
-			if (orderState == OrderState.Filled)
-			{
-				Print($"{Time[0]} Order filled: {order.Name} @ {averageFillPrice}");
-			}
-			else if (orderState == OrderState.Cancelled)
-			{
-				Print($"{Time[0]} Order cancelled: {order.Name}");
-			}
-		}
-
-		protected override void OnPositionUpdate(Position position, double averagePrice, int quantity, OrderState orderState, datetime time, ErrorCode errorCode, string nativeErrorCode)
-		{
-			if (position.MarketPosition == MarketPosition.Flat)
-			{
-				Print($"{Time[0]} Position closed: {position.Quantity} @ {averagePrice}");
+				EntryShort(contractSize, "VFL_Short");
+				SetStopLoss(CalculationMode.Points, stopLossPoints);
+				SetProfitTarget(CalculationMode.Points, profitTargetPoints);
+				entryPrice = Close[0];
+				breakEvenSet = false;
+				Print(Time[0] + " SHORT: entry=" + Close[0].ToString("F2") + 
+					  " stop=" + (Close[0] + stopLossPoints).ToString("F2") + 
+					  " target=" + (Close[0] - profitTargetPoints).ToString("F2"));
 			}
 		}
 
 		#region Properties
+
 		[NinjaScriptProperty]
 		[Range(1, double.MaxValue)]
-		[Display(Name="Stop Loss Points", Description="Stop loss distance in points", Order=1, GroupName="Parameters")]
+		[Display(Name = "Stop Loss Points", Description = "Stop loss distance in points", Order = 1, GroupName = "Parameters")]
 		public double StopLossPoints
-		{ 
+		{
 			get { return stopLossPoints; }
 			set { stopLossPoints = value; }
 		}
 
 		[NinjaScriptProperty]
 		[Range(1, double.MaxValue)]
-		[Display(Name="Profit Target Points", Description="Profit target distance in points", Order=2, GroupName="Parameters")]
+		[Display(Name = "Profit Target Points", Description = "Profit target distance in points", Order = 2, GroupName = "Parameters")]
 		public double ProfitTargetPoints
-		{ 
+		{
 			get { return profitTargetPoints; }
 			set { profitTargetPoints = value; }
 		}
 
 		[NinjaScriptProperty]
 		[Range(0, double.MaxValue)]
-		[Display(Name="Breakeven Move Points", Description="Profit level at which to move stop to entry", Order=3, GroupName="Parameters")]
+		[Display(Name = "Breakeven Move Points", Description = "Profit level at which to move stop to entry", Order = 3, GroupName = "Parameters")]
 		public double BreakEvenMovePoints
-		{ 
+		{
 			get { return breakEvenMovePoints; }
 			set { breakEvenMovePoints = value; }
 		}
 
 		[NinjaScriptProperty]
 		[Range(1, 10)]
-		[Display(Name="Contract Size", Description="Number of contracts per entry", Order=4, GroupName="Parameters")]
+		[Display(Name = "Contract Size", Description = "Number of contracts per entry", Order = 4, GroupName = "Parameters")]
 		public int ContractSize
-		{ 
+		{
 			get { return contractSize; }
 			set { contractSize = value; }
 		}
+
 		#endregion
 	}
 }
