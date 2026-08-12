@@ -53,7 +53,7 @@ namespace ISE.BacktestTools
                 var bars = LoadHistoricalBars(instrument);
                 if (bars == null || bars.Count == 0)
                 {
-                    Console.WriteLine("❌ ERROR: No MNQ bars loaded.");
+                    Console.WriteLine($"❌ ERROR: No {instrument} bars loaded.");
                     return;
                 }
 
@@ -216,11 +216,21 @@ namespace ISE.BacktestTools
             if (string.IsNullOrWhiteSpace(path))
                 path = Environment.GetEnvironmentVariable("ISE_DATASET");
 
-            if (string.IsNullOrWhiteSpace(path) || path == null || !File.Exists(path))
+            // Distinguish "not configured" from "configured but the file is not there".
+            // Collapsing both into one message sent us chasing an env-var problem when
+            // the real cause was a download that had not finished.
+            if (string.IsNullOrWhiteSpace(path))
             {
-                Console.WriteLine($"   ⚠️  No dataset found for {instrument}");
-                Console.WriteLine($"   Set ISE_DATASET_{instrument} to the .tsv path, or place the file in");
-                Console.WriteLine($@"   Documents\NinjaTrader 8\ISEEliteResearch\ with '{instrument}' in its name.");
+                Console.WriteLine($"   ⚠️  No dataset path set for {instrument}");
+                Console.WriteLine($"   Set ISE_DATASET_{instrument} or ISE_DATASET to the .tsv path.");
+                return new List<HistoricalBar>();
+            }
+
+            if (!File.Exists(path))
+            {
+                Console.WriteLine($"   ⚠️  Dataset path IS set but the file does not exist:");
+                Console.WriteLine($"       {path}");
+                Console.WriteLine($"   Check the download completed and the filename matches exactly.");
                 return new List<HistoricalBar>();
             }
 
