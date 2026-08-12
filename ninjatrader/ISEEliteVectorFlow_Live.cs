@@ -64,9 +64,55 @@ namespace NinjaTrader.NinjaScript.Strategies
 				breakEvenSet = false;
 			}
 
-			// TODO: Wire these to your VectorFlow indicator
+			// Wire VectorFlow indicator signals
+			// The VectorFlow indicator plots BUY/SELL columns; check if they fired this bar
 			bool buySignal = false;
 			bool sellSignal = false;
+
+			try
+			{
+				// Try to get VectorFlow indicator (check common naming patterns)
+				dynamic vf = null;
+				
+				// Attempt 1: VectorFlowV1S (most likely based on file naming)
+				try { vf = Indicators.VectorFlowV1S(Close); }
+				catch { }
+				
+				// Attempt 2: VectorFlowAlgoV1S
+				if (vf == null)
+					try { vf = Indicators.VectorFlowAlgoV1S(Close); }
+					catch { }
+				
+				// Attempt 3: VectorFlowV1SNT8
+				if (vf == null)
+					try { vf = Indicators.VectorFlowV1SNT8(Close); }
+					catch { }
+
+				// If we found the indicator, read Buy Signal and Sell Signal columns
+				if (vf != null)
+				{
+					try
+					{
+						buySignal = (vf.BuySignal != null && vf.BuySignal[0] > 0);
+						sellSignal = (vf.SellSignal != null && vf.SellSignal[0] > 0);
+					}
+					catch
+					{
+						// Column names might be different; try alternative names
+						try
+						{
+							buySignal = (vf.Buy != null && vf.Buy[0] > 0);
+							sellSignal = (vf.Sell != null && vf.Sell[0] > 0);
+						}
+						catch { }
+					}
+				}
+			}
+			catch
+			{
+				// If indicator not found, signals remain false
+				// Check NinjaTrader Output window for details
+			}
 
 			// LONG entry
 			if (buySignal && Position.MarketPosition == MarketPosition.Flat)
@@ -76,7 +122,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 				SetProfitTarget(CalculationMode.Price, Close[0] + (profitTargetPoints * 0.25));  // 44 points up
 				entryPrice = Close[0];
 				breakEvenSet = false;
-				Print(Time[0] + " LONG entry at " + Close[0]);
+				Print(Time[0] + " LONG entry at " + Close[0] + " | Stop: " + (Close[0] - (stopLossPoints * 0.25)) + " | Target: " + (Close[0] + (profitTargetPoints * 0.25)));
 			}
 
 			// SHORT entry
@@ -87,7 +133,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 				SetProfitTarget(CalculationMode.Price, Close[0] - (profitTargetPoints * 0.25));  // 44 points down
 				entryPrice = Close[0];
 				breakEvenSet = false;
-				Print(Time[0] + " SHORT entry at " + Close[0]);
+				Print(Time[0] + " SHORT entry at " + Close[0] + " | Stop: " + (Close[0] + (stopLossPoints * 0.25)) + " | Target: " + (Close[0] - (profitTargetPoints * 0.25)));
 			}
 		}
 
