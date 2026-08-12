@@ -39,6 +39,7 @@ namespace ISE.BacktestHarness.Engines
         private bool _profitFloorLocked = false;
         private string _pendingExitReason = "";
         private decimal _dailyLossLimit = 0m;
+        private decimal _dailyProfitTarget = 0m;
         private DateTime _currentTradingDay = DateTime.MinValue;
         private decimal _dayRealizedPnL = 0m;
         private bool _dayHalted = false;
@@ -103,6 +104,7 @@ namespace ISE.BacktestHarness.Engines
             _holdToReversal = config.HoldToReversal;
             _profitFloorDollars = config.ProfitFloorDollars;
             _dailyLossLimit = config.DailyLossLimitDollars;
+            _dailyProfitTarget = config.DailyProfitTargetDollars;
             _currentTradingDay = DateTime.MinValue;
             _dayRealizedPnL = 0m;
             _dayHalted = false;
@@ -142,11 +144,11 @@ namespace ISE.BacktestHarness.Engines
 
                 // Daily circuit breaker. Checked before signals so a halted day cannot
                 // open a fresh position on the same bar it was halted.
-                if (_dailyLossLimit > 0 && _dayHalted)
+                if (_dayHalted)
                 {
                     if (_activeContracts > 0)
                     {
-                        _pendingExitReason = "DAYSTOP";
+                        _pendingExitReason = _dayRealizedPnL > 0 ? "DAYGOAL" : "DAYSTOP";
                         ClosePosition(bar);
                     }
                     continue;
@@ -463,6 +465,8 @@ namespace ISE.BacktestHarness.Engines
 
             _dayRealizedPnL += pnl - slippage;
             if (_dailyLossLimit > 0 && _dayRealizedPnL <= -_dailyLossLimit)
+                _dayHalted = true;
+            if (_dailyProfitTarget > 0 && _dayRealizedPnL >= _dailyProfitTarget)
                 _dayHalted = true;
             UpdateDrawdown();
 

@@ -118,6 +118,7 @@ namespace ISE.BacktestHarness.Engines
             // Answers the only question that matters here: does holding to the reversal
             // actually beat a fixed target on the same data?
             PrintExitModeComparison(allResults, 3);
+            PrintDailyGoalComparison(allResults, 2);
 
             int rank = 1;
             foreach (var result in sorted)
@@ -231,6 +232,47 @@ namespace ISE.BacktestHarness.Engines
                 }
                 Console.WriteLine();
             }
+        }
+
+
+        /// <summary>
+        /// Does stopping at a fixed daily number help? Holds contracts, stop and target
+        /// constant and varies ONLY the daily profit halt, so the difference is the rule
+        /// and nothing else. Run at 2 contracts because that is what is traded live.
+        /// </summary>
+        private void PrintDailyGoalComparison(List<BacktestResult> results, int contracts)
+        {
+            var pool = results.Where(r => r.Config.MaximumContracts == contracts
+                                       && !r.Config.HoldToReversal
+                                       && !r.Config.UseTrailingStop
+                                       && r.Config.BreakevenMovePoints == 0).ToList();
+            if (pool.Count == 0) return;
+
+            // Pick the target that does best with no halt, then vary only the halt.
+            var baseline = pool.Where(r => r.Config.DailyProfitTargetDollars == 0m)
+                               .OrderByDescending(r => r.GrossProfit).FirstOrDefault();
+            if (baseline == null) return;
+
+            var stop = baseline.Config.StopDistanceRisk;
+            var risk = baseline.Config.AdaptiveRiskMultiplier;
+            var hold = baseline.Config.LiquidityCapacity;
+
+            Console.WriteLine($"===== DAILY PROFIT HALT ({contracts} contracts, " +
+                              $"{stop:F0}pt stop, {stop * risk:F0}pt target) =====\n");
+            Console.WriteLine("  HALT AT      GROSS   MED/DAY   AVG/DAY  DAYS  LOSING   >=500      MAXDD");
+
+            foreach (var r in pool.Where(r => r.Config.StopDistanceRisk == stop
+                                           && r.Config.AdaptiveRiskMultiplier == risk
+                                           && r.Config.LiquidityCapacity == hold)
+                                  .OrderBy(r => r.Config.DailyProfitTargetDollars))
+            {
+                var label = r.Config.DailyProfitTargetDollars == 0m
+                    ? "none" : $"${r.Config.DailyProfitTargetDollars:F0}";
+                Console.WriteLine(
+                    $"  {label,-8} {r.GrossProfit,10:F0} {r.MedianDailyPnL,9:F0} {r.AvgDailyPnL,9:F0} " +
+                    $"{r.TradingDays,5} {r.LosingDays,7} {r.PctDaysAbove(500m),6:F0}% {r.MaxDrawdown,10:F0}");
+            }
+            Console.WriteLine();
         }
 
     }

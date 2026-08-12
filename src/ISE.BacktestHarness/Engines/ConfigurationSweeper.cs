@@ -78,6 +78,11 @@ namespace ISE.BacktestHarness.Engines
             // recoveries than it saves in blowout sessions.
             var dailyLossLimits = new[] { 0m, 800m, 1200m, 1800m };
 
+            // Daily profit halt. 0 = trade the whole session (what every run so far did).
+            // The rest test "hit the number and walk away" at and around Devon's live
+            // $500 goal, scaled up so the effect is visible at larger contract counts too.
+            var dailyProfitTargets = new[] { 0m, 500m, 600m, 750m, 1000m };
+
             // Breakeven trigger, instrument-scaled. 0 = never move the stop, which is
             // what the previous sweep did on every single config - the live method's
             // move to BE at 250-300 ticks (62.5-75pt on MNQ) was never tested.
@@ -113,8 +118,13 @@ namespace ISE.BacktestHarness.Engines
                                     dailyLossLimitDollars: dayStop));
                             }
 
-                            // Arm 2: fixed profit target
+                            // Arm 2: fixed profit target - the rule Devon actually
+                            // trades - crossed with the daily profit halt and the
+                            // breakeven move, so "close at TP" and "stop at $500 for
+                            // the day" are measured together rather than assumed.
                             foreach (var risk in riskMultipliers)
+                            foreach (var dayGoal in dailyProfitTargets)
+                            foreach (var be in breakEvenMoves)
                             {
                                 configs.Add(new BacktestConfiguration(
                                     configId: configId++,
@@ -124,9 +134,11 @@ namespace ISE.BacktestHarness.Engines
                                     liquidityCapacity: hold,
                                     useTrailingStop: false,
                                     trendFilterBars: filter,
-                                    breakEvenMovePoints: 0,
+                                    breakEvenMovePoints: be,
                                     holdToReversal: false,
-                                    profitFloorDollars: 0m));
+                                    profitFloorDollars: 0m,
+                                    dailyLossLimitDollars: 0m,
+                                    dailyProfitTargetDollars: dayGoal));
                             }
 
                             // Arm 3: trailing stop (riskMultiplier is unread here)
