@@ -30,7 +30,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 				EntryHandling = EntryHandling.AllEntries;
 				IsExitOnSessionCloseStrategy = false;
 				ExitOnSessionCloseSeconds = 300;
-				TraceOrders = true;
 				StopTargetHandling = StopTargetHandling.PerEntryExecution;
 				BarsRequiredToTrade = 0;
 			}
@@ -41,19 +40,26 @@ namespace NinjaTrader.NinjaScript.Strategies
 			if (CurrentBar < 1)
 				return;
 
-			// Breakeven logic
-			if (Position.MarketPosition != MarketPosition.Flat)
+			// Breakeven logic - move stop to entry once in profit
+			if (Position.MarketPosition == MarketPosition.Long && !breakEvenSet)
 			{
-				double unrealizedPnL = Position.GetUnrealizedProfitLoss(Close[0], PerformanceUnit.Points);
-
-				if (!breakEvenSet && unrealizedPnL >= breakEvenMovePoints)
+				if (Close[0] > entryPrice + (breakEvenMovePoints * 0.25))  // 0.25 = point value for MNQ
 				{
 					SetStopLoss(CalculationMode.Price, entryPrice);
 					breakEvenSet = true;
-					Print(Time[0] + " BREAKEVEN ACTIVATED at " + unrealizedPnL.ToString("F2") + "pt profit");
+					Print(Time[0] + " LONG BREAKEVEN at " + Close[0]);
 				}
 			}
-			else
+			else if (Position.MarketPosition == MarketPosition.Short && !breakEvenSet)
+			{
+				if (Close[0] < entryPrice - (breakEvenMovePoints * 0.25))
+				{
+					SetStopLoss(CalculationMode.Price, entryPrice);
+					breakEvenSet = true;
+					Print(Time[0] + " SHORT BREAKEVEN at " + Close[0]);
+				}
+			}
+			else if (Position.MarketPosition == MarketPosition.Flat)
 			{
 				breakEvenSet = false;
 			}
@@ -65,23 +71,23 @@ namespace NinjaTrader.NinjaScript.Strategies
 			// LONG entry
 			if (buySignal && Position.MarketPosition == MarketPosition.Flat)
 			{
-				AddOrder(OrderAction.Buy, OrderType.Market, contractSize, 0, 0, "", "Long");
-				SetStopLoss(CalculationMode.Points, stopLossPoints);
-				SetProfitTarget(CalculationMode.Points, profitTargetPoints);
+				EnterLong(contractSize, "Long");
+				SetStopLoss(CalculationMode.Price, Close[0] - (stopLossPoints * 0.25));  // 87.5 points down
+				SetProfitTarget(CalculationMode.Price, Close[0] + (profitTargetPoints * 0.25));  // 44 points up
 				entryPrice = Close[0];
 				breakEvenSet = false;
-				Print(Time[0] + " LONG entry at " + Close[0].ToString("F2"));
+				Print(Time[0] + " LONG entry at " + Close[0]);
 			}
 
 			// SHORT entry
 			if (sellSignal && Position.MarketPosition == MarketPosition.Flat)
 			{
-				AddOrder(OrderAction.Sell, OrderType.Market, contractSize, 0, 0, "", "Short");
-				SetStopLoss(CalculationMode.Points, stopLossPoints);
-				SetProfitTarget(CalculationMode.Points, profitTargetPoints);
+				EnterShort(contractSize, "Short");
+				SetStopLoss(CalculationMode.Price, Close[0] + (stopLossPoints * 0.25));  // 87.5 points up
+				SetProfitTarget(CalculationMode.Price, Close[0] - (profitTargetPoints * 0.25));  // 44 points down
 				entryPrice = Close[0];
 				breakEvenSet = false;
-				Print(Time[0] + " SHORT entry at " + Close[0].ToString("F2"));
+				Print(Time[0] + " SHORT entry at " + Close[0]);
 			}
 		}
 
