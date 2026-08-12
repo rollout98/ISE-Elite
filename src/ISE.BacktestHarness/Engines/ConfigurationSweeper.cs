@@ -35,9 +35,11 @@ namespace ISE.BacktestHarness.Engines
             // MGC: 5-30 points ($10/pt -> $50-$300 risk per contract). Gold trades ~4100,
             //      so a 50pt stop would be a $50 move -- more than a full day's range.
             //      87.5 MNQ pts = $175/contract; the MGC equivalent is ~17.5 pts.
+            // MNQ 100pt = Devon's live 400-tick stop, previously outside the sweep.
+            // MGC unchanged.
             var stopDistances = _instrument == "MGC"
                 ? new[] { 5.0, 7.5, 10.0, 12.5, 15.0, 17.5, 20.0, 25.0, 30.0 }
-                : new[] { 60.0, 75.0, 87.5 };
+                : new[] { 60.0, 75.0, 87.5, 100.0 };
 
             // Profit floor in DOLLARS on the whole position.
             // DISCOVERY RUN: floor is 0 (disabled) across the board. We do not yet know
@@ -70,7 +72,10 @@ namespace ISE.BacktestHarness.Engines
             //                   setup was an 87.5pt stop with a 44pt target (~0.5R),
             //                   so the range brackets that.
             // Arm 3: TRAIL    - stop follows the favourable extreme by StopDistance.
-            var riskMultipliers = new[] { 0.5, 1.0, 1.5, 2.0, 3.0 };
+            // 4.0 added so the live setup lands exactly in the sweep: a 100pt stop with
+            // a 400pt target is the 1600-tick TP from the ATM template. The old ceiling
+            // of 3.0 meant the configuration actually traded was never tested.
+            var riskMultipliers = new[] { 0.5, 1.0, 1.5, 2.0, 3.0, 4.0 };
 
             // Daily circuit breaker. 0 = none (what every run so far has used).
             // The worst observed day was about -$2,400 at 3 contracts with no breaker;

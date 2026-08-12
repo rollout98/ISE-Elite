@@ -120,6 +120,7 @@ namespace ISE.BacktestHarness.Engines
             PrintExitModeComparison(allResults, 3);
             PrintSurvivableSize(allResults);
             PrintDailyGoalComparison(allResults, 2);
+            PrintLiveConfigCheck(allResults);
             PrintDailyStopComparison(allResults, 3);
             PrintSessionBreakdown(allResults, 3);
 
@@ -415,6 +416,40 @@ namespace ISE.BacktestHarness.Engines
                     ? "none" : $"${r.Config.DailyLossLimitDollars:F0}";
                 Console.WriteLine($"  {label,-8} {r.GrossProfit,10:F0} {r.MedianDailyPnL,9:F0} " +
                                   $"{r.LosingDays,7} {r.WorstDay,11:F0} {r.MaxDrawdown,10:F0}");
+            }
+            Console.WriteLine();
+        }
+
+
+        /// <summary>
+        /// Devon's actual live MNQ setup, at every contract count: 100pt stop (400
+        /// ticks), 400pt target (1600 ticks), breakeven armed at 75pt (300 ticks).
+        /// Reported on its own because "what does the thing I already trade do" is a
+        /// different question from "what is the best config in the sweep", and only
+        /// the first one can be checked against real experience.
+        /// </summary>
+        private void PrintLiveConfigCheck(List<BacktestResult> results)
+        {
+            var live = results.Where(r =>
+                    !r.Config.HoldToReversal && !r.Config.UseTrailingStop &&
+                    Math.Abs(r.Config.StopDistanceRisk - 100.0) < 0.01 &&
+                    Math.Abs(r.Config.AdaptiveRiskMultiplier - 4.0) < 0.01 &&
+                    Math.Abs(r.Config.BreakevenMovePoints - 75.0) < 0.01 &&
+                    r.Config.DailyLossLimitDollars == 0m)
+                .GroupBy(r => r.Config.MaximumContracts)
+                .Select(g => g.OrderByDescending(r => r.GrossProfit).First())
+                .OrderBy(r => r.Config.MaximumContracts)
+                .ToList();
+            if (live.Count == 0) return;
+
+            Console.WriteLine("===== LIVE CONFIG: 100pt stop / 400pt target / BE at 75pt =====\n");
+            Console.WriteLine("  SIZE      GROSS   MED/DAY   WIN%  TRADES  >=500     EOD-DD  ALIVE?");
+            foreach (var r in live)
+            {
+                Console.WriteLine(
+                    $"  {r.Config.MaximumContracts,4} {r.GrossProfit,10:F0} {r.MedianDailyPnL,9:F0} " +
+                    $"{r.WinRate,6:F1} {r.TotalTrades,7} {r.PctDaysAbove(500m),5:F0}% " +
+                    $"{r.EodTrailingDrawdown,10:F0}  {(r.AccountBlown(AccountDrawdownLimit) ? "DEAD" : "ok")}");
             }
             Console.WriteLine();
         }
