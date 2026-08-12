@@ -64,6 +64,57 @@ namespace ISE.BacktestHarness.Models
         }
         public decimal TotalSlippage => Trades.Sum(t => t.Slippage);
 
+        /// <summary>
+        /// P&amp;L bucketed by trading day, keyed on the day the trade CLOSED.
+        /// The mean alone is misleading: a $900 average can be five $300 days and one
+        /// $3,900 day. Every distribution metric below reads off this.
+        /// </summary>
+        public IReadOnlyList<decimal> DailyPnL
+        {
+            get
+            {
+                if (Trades.Count == 0) return System.Array.Empty<decimal>();
+                return Trades
+                    .GroupBy(t => t.ExitTimeUtc.Date)
+                    .OrderBy(g => g.Key)
+                    .Select(g => g.Sum(t => t.PnL))
+                    .ToList();
+            }
+        }
+
+        public int TradingDays => DailyPnL.Count;
+
+        public decimal AvgDailyPnL =>
+            TradingDays > 0 ? DailyPnL.Sum() / TradingDays : 0m;
+
+        /// <summary>Middle day. Less flattered by one outsized session than the mean.</summary>
+        public decimal MedianDailyPnL
+        {
+            get
+            {
+                var d = DailyPnL.OrderBy(x => x).ToList();
+                if (d.Count == 0) return 0m;
+                return d.Count % 2 == 1
+                    ? d[d.Count / 2]
+                    : (d[d.Count / 2 - 1] + d[d.Count / 2]) / 2m;
+            }
+        }
+
+        public decimal BestDay => DailyPnL.Count > 0 ? DailyPnL.Max() : 0m;
+        public decimal WorstDay => DailyPnL.Count > 0 ? DailyPnL.Min() : 0m;
+
+        public int LosingDays => DailyPnL.Count(d => d < 0);
+
+        /// <summary>
+        /// Share of trading days clearing the target. This, not the average, is the
+        /// answer to "can this make $500 a day?" - a strategy averaging $900 that
+        /// clears $500 on only a third of days is not a $500/day strategy.
+        /// </summary>
+        public double PctDaysAbove(decimal target) =>
+            TradingDays > 0
+                ? (double)DailyPnL.Count(d => d >= target) / TradingDays * 100.0
+                : 0.0;
+
         // Risk metrics
         public double ProfitFactor => LosingTrades > 0 
             ? (double)(Trades.Where(t => t.IsWin).Sum(t => t.PnL) / 

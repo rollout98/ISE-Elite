@@ -39,10 +39,12 @@ namespace ISE.BacktestHarness.Engines
                 ? new[] { 5.0, 7.5, 10.0, 12.5, 15.0, 17.5, 20.0, 25.0, 30.0 }
                 : new[] { 60.0, 75.0, 87.5 };
 
-            // Profit floor in DOLLARS on the whole position. 0 = no floor (pure
-            // hold-to-reversal). 500 = the stated daily goal. 1000 tests whether
-            // letting it run further before locking is worth the give-back risk.
-            var profitFloors = new[] { 0m, 500m, 1000m };
+            // Profit floor in DOLLARS on the whole position.
+            // DISCOVERY RUN: floor is 0 (disabled) across the board. We do not yet know
+            // what this strategy yields per day, so imposing a $500 lock would truncate
+            // every winner at $500 and hide the real distribution. Measure first, then
+            // set the floor from the observed numbers rather than from the goal.
+            var profitFloors = new[] { 0m };
 
             // MAX HOLD in bars (minutes on 1-min data). Reversal exits are the primary
             // mechanism now, so these are a safety cap rather than a tuning knob.

@@ -28,6 +28,7 @@ namespace ISE.BacktestHarness.Engines
                 // Header
                 writer.WriteLine("Rank,ConfigId,MaxContracts,ProfitFloor,StopDist,MaxHoldBars,TrendFilter,ExitMode," +
                                 "GrossProfit,ReturnPct,TotalTrades,WinRate,WinTrades,LossTrades," +
+                                "TradingDays,AvgDaily,MedianDaily,BestDay,WorstDay,LosingDays,PctDays500,PctDays1000," +
                                 "AvgPnL,LargestWin,LargestLoss,MaxDD,ProfitFactor,Sharpe,Score");
 
                 // Rows
@@ -53,6 +54,14 @@ namespace ISE.BacktestHarness.Engines
                         $"{result.WinRate:F1}," +
                         $"{result.WinningTrades}," +
                         $"{result.LosingTrades}," +
+                        $"{result.TradingDays}," +
+                        $"{result.AvgDailyPnL:F2}," +
+                        $"{result.MedianDailyPnL:F2}," +
+                        $"{result.BestDay:F2}," +
+                        $"{result.WorstDay:F2}," +
+                        $"{result.LosingDays}," +
+                        $"{result.PctDaysAbove(500m):F1}," +
+                        $"{result.PctDaysAbove(1000m):F1}," +
                         $"{result.AveragePnL:F2}," +
                         $"{result.LargestWin:F2}," +
                         $"{result.LargestLoss:F2}," +
@@ -114,6 +123,17 @@ namespace ISE.BacktestHarness.Engines
                 var days = result.Trades.Select(t => t.EntryTimeUtc.Date).Distinct().Count();
                 var perDay = days > 0 ? result.Trades.Count / (double)days : 0;
                 Console.WriteLine($"     {perDay,6:F1} trades/day over {days} days");
+
+                // Daily distribution. The mean on its own hides the shape: a $900
+                // average can be five $300 days and one $3,900 day. Median, worst day
+                // and the share of days clearing the target say whether the number is
+                // dependable or just one good session doing all the work.
+                Console.WriteLine(
+                    $"     DAILY  avg ${result.AvgDailyPnL,9:F0} | med ${result.MedianDailyPnL,9:F0} | " +
+                    $"best ${result.BestDay,9:F0} | worst ${result.WorstDay,9:F0}");
+                Console.WriteLine(
+                    $"     DAYS   {result.TradingDays,3} total | {result.LosingDays,3} losing | " +
+                    $"{result.PctDaysAbove(500m),5:F0}% >= $500 | {result.PctDaysAbove(1000m),5:F0}% >= $1000");
 
                 var longs = result.Trades.Where(t => t.Direction == "LONG").ToList();
                 var shorts = result.Trades.Where(t => t.Direction == "SHORT").ToList();
