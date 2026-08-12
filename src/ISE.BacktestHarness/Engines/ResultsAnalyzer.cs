@@ -360,15 +360,23 @@ namespace ISE.BacktestHarness.Engines
                                   $"{gross,12:F0} {gross / n,12:F0}");
             }
 
-            Console.WriteLine("\n  BY HOUR (CT)   trades / gross");
+            // DAYS matters as much as TRADES: 10 trades in the 08:00 bucket means ten
+            // separate days had an 08:00 entry, not ten trades in one morning. A slot
+            // that fires on 10 of 42 days is a thin basis for a sizing decision, and
+            // WORST shows what a single bad print in that slot actually costs.
+            var totalDays = best.TradingDays;
+            Console.WriteLine("\n  HOUR   DAYS  TRADES   WIN%      GROSS  AVG/TRADE      WORST");
             for (int h = 0; h < 24; h++)
             {
                 var bucket = best.Trades.Where(t => ctHour(t) == h).ToList();
                 if (bucket.Count == 0) continue;
+                var days = bucket.Select(t => t.TradingDay).Distinct().Count();
                 var gross = bucket.Sum(t => t.PnL - t.Slippage);
-                var bar = new string(gross >= 0 ? '+' : '-',
-                                     Math.Min(40, (int)(Math.Abs(gross) / 500) + 1));
-                Console.WriteLine($"  {h:00}:00  {bucket.Count,3}  {gross,9:F0}  {bar}");
+                var worst = bucket.Min(t => t.PnL - t.Slippage);
+                Console.WriteLine(
+                    $"  {h:00}:00  {days,4}/{totalDays,-3} {bucket.Count,5} " +
+                    $"{bucket.Count(t => t.IsWin) * 100.0 / bucket.Count,6:F0} " +
+                    $"{gross,10:F0} {gross / bucket.Count,10:F0} {worst,10:F0}");
             }
             Console.WriteLine();
         }
