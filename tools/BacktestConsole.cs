@@ -148,6 +148,27 @@ namespace ISE.BacktestTools
                 Console.WriteLine("STEP 2: Running Backtest (parameter sweep)");
                 Console.WriteLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
+                // Optional date window, so two runs can be forced onto IDENTICAL periods.
+                // Without this, comparing the 2m result (29 overlapping days) to the 5m
+                // result (42 days) compares two different stretches of market, and any
+                // difference is as likely to be the calendar as the timeframe.
+                var winStart = Environment.GetEnvironmentVariable("ISE_WINDOW_START");
+                var winEnd = Environment.GetEnvironmentVariable("ISE_WINDOW_END");
+                if (!string.IsNullOrWhiteSpace(winStart) || !string.IsNullOrWhiteSpace(winEnd))
+                {
+                    var from = DateTime.TryParse(winStart, out var f) ? f : DateTime.MinValue;
+                    var to = DateTime.TryParse(winEnd, out var t) ? t : DateTime.MaxValue;
+                    var before = bars.Count;
+                    bars = bars.Where(b => b.TradingDay >= from && b.TradingDay <= to).ToList();
+                    Console.WriteLine($"   Window filter: {from:yyyy-MM-dd} to {to:yyyy-MM-dd} " +
+                                      $"-> {bars.Count:N0} bars (from {before:N0})\n");
+                    if (bars.Count == 0)
+                    {
+                        Console.WriteLine("\n❌ FATAL: Window filter left no bars.\n");
+                        Environment.Exit(1);
+                    }
+                }
+
                 // Final gate. Every catastrophic run in this project shared one shape:
                 // signals failed to load, the engine fell back to its built-in 5/10 MA
                 // crossover, and a full ranked results table came out looking entirely
