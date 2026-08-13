@@ -21,58 +21,59 @@ try
     var bars = new HistoricalDataFileStore().ReadContractAware(path);
     var candidates = new MorningMarketStateAdaptiveAnalyzer().Analyze(bars);
     var potential = new MorningOpportunityPotentialAnalyzer();
-    var observations = potential.Analyze(bars, candidates);
-    var quality = new MorningOpportunityQualityDiagnosticsAnalyzer();
-    var buckets = quality.BuildBuckets(observations);
-    var dimensions = quality.BuildDimensions(observations);
+    var potentialObservations = potential.Analyze(bars, candidates);
+    var entry = new MorningEntryEfficiencyAnalyzer();
+    var entryObservations = entry.Analyze(bars, potentialObservations);
+    var matrix = entry.BuildMatrix(entryObservations);
 
-    Console.WriteLine("ISE Elite V5.1 Opportunity Quality Diagnostic Study");
+    Console.WriteLine("ISE Elite V5.2 Potential x Entry Efficiency Study");
     Console.WriteLine($"Dataset: {path}");
     Console.WriteLine($"Bars: {bars.Count}");
     Console.WriteLine($"Candidate opportunities: {candidates.Count}");
-    Console.WriteLine($"Scored observations: {observations.Count}");
+    Console.WriteLine($"Potential observations: {potentialObservations.Count}");
+    Console.WriteLine($"Entry-efficiency observations: {entryObservations.Count}");
     Console.WriteLine();
-    Console.WriteLine("bucket\tcount\tavgScore\tavgMFE\tavgMAE\tavgRealized\tpositiveRate\tMFE/MAE\tMFE/Risk\tmoveAge\tconsumedFrac\texhaustRisk\taccel\tresets\tMFE>=300\tMFE>=500\t300+&MAE>=100\t500+&MAE>=100");
+    Console.WriteLine("potential\tentry\tdecision\tcount\tavgMFE\tavgMAE\tavgRealized\tpositiveRate\tMFE>=300\tMFE>=500");
 
-    foreach (var bucket in buckets)
+    foreach (var row in matrix)
     {
         Console.WriteLine(string.Join("\t", new[]
         {
-            bucket.Label,
-            bucket.Count.ToString(CultureInfo.InvariantCulture),
-            bucket.AverageScore.ToString("F1", CultureInfo.InvariantCulture),
-            bucket.AverageMfeTicks.ToString("F1", CultureInfo.InvariantCulture),
-            bucket.AverageMaeTicks.ToString("F1", CultureInfo.InvariantCulture),
-            bucket.AverageRealizedDollars.ToString("F2", CultureInfo.InvariantCulture),
-            (bucket.PositiveRate * 100m).ToString("F1", CultureInfo.InvariantCulture) + "%",
-            bucket.AverageMfeMaeRatio.ToString("F2", CultureInfo.InvariantCulture),
-            bucket.AverageMfeRiskRatio.ToString("F2", CultureInfo.InvariantCulture),
-            bucket.AverageMoveAgeBars.ToString("F1", CultureInfo.InvariantCulture),
-            bucket.AverageConsumedFraction.ToString("F2", CultureInfo.InvariantCulture),
-            bucket.AverageExhaustionRisk.ToString("F2", CultureInfo.InvariantCulture),
-            bucket.AverageAccelerationRatio.ToString("F2", CultureInfo.InvariantCulture),
-            bucket.AveragePullbackResetCount.ToString("F2", CultureInfo.InvariantCulture),
-            bucket.Hit300.ToString(CultureInfo.InvariantCulture),
-            bucket.Hit500.ToString(CultureInfo.InvariantCulture),
-            bucket.Hit300WithMaeAtLeast100.ToString(CultureInfo.InvariantCulture),
-            bucket.Hit500WithMaeAtLeast100.ToString(CultureInfo.InvariantCulture)
+            row.PotentialBand,
+            row.EntryBand,
+            row.DecisionClass.ToString(),
+            row.Count.ToString(CultureInfo.InvariantCulture),
+            row.AverageMfeTicks.ToString("F1", CultureInfo.InvariantCulture),
+            row.AverageMaeTicks.ToString("F1", CultureInfo.InvariantCulture),
+            row.AverageRealizedDollars.ToString("F2", CultureInfo.InvariantCulture),
+            (row.PositiveRate * 100m).ToString("F1", CultureInfo.InvariantCulture) + "%",
+            row.Hit300.ToString(CultureInfo.InvariantCulture),
+            row.Hit500.ToString(CultureInfo.InvariantCulture)
         }));
     }
 
     Console.WriteLine();
-    Console.WriteLine("V5.1 diagnostic dimensions (outcome diagnostics only; not score inputs)");
-    Console.WriteLine("dimension\tvalue\tcount\tavgScore\tavgMFE\tavgMAE\tavgRealized");
-    foreach (var row in dimensions)
+    Console.WriteLine("Decision-class summary");
+    Console.WriteLine("decision\tcount\tavgPotential\tavgEntry\tavgMFE\tavgMAE\tavgRealized\tpositiveRate\tMFE>=300\tMFE>=500");
+
+    foreach (MorningOpportunityDecisionClass decision in Enum.GetValues(typeof(MorningOpportunityDecisionClass)))
     {
+        var members = entryObservations.Where(x => MorningEntryEfficiencyAnalyzer.DecisionFor(
+            MorningEntryEfficiencyAnalyzer.PotentialBand(x.PotentialScore),
+            MorningEntryEfficiencyAnalyzer.EntryBand(x.EntryEfficiencyScore)) == decision).ToList();
+
         Console.WriteLine(string.Join("\t", new[]
         {
-            row.Dimension,
-            row.Value,
-            row.Count.ToString(CultureInfo.InvariantCulture),
-            row.AverageScore.ToString("F1", CultureInfo.InvariantCulture),
-            row.AverageMfeTicks.ToString("F1", CultureInfo.InvariantCulture),
-            row.AverageMaeTicks.ToString("F1", CultureInfo.InvariantCulture),
-            row.AverageRealizedDollars.ToString("F2", CultureInfo.InvariantCulture)
+            decision.ToString(),
+            members.Count.ToString(CultureInfo.InvariantCulture),
+            (members.Count == 0 ? 0m : members.Average(x => x.PotentialScore)).ToString("F1", CultureInfo.InvariantCulture),
+            (members.Count == 0 ? 0m : members.Average(x => x.EntryEfficiencyScore)).ToString("F1", CultureInfo.InvariantCulture),
+            (members.Count == 0 ? 0m : members.Average(x => x.Source.Source.MaxFavorableTicks)).ToString("F1", CultureInfo.InvariantCulture),
+            (members.Count == 0 ? 0m : members.Average(x => x.Source.Source.MaxAdverseTicks)).ToString("F1", CultureInfo.InvariantCulture),
+            (members.Count == 0 ? 0m : members.Average(x => x.Source.Source.RealizedDollars)).ToString("F2", CultureInfo.InvariantCulture),
+            (members.Count == 0 ? 0m : 100m * members.Count(x => x.Source.Source.RealizedDollars > 0m) / members.Count).ToString("F1", CultureInfo.InvariantCulture) + "%",
+            members.Count(x => x.Source.Source.MaxFavorableTicks >= 300m).ToString(CultureInfo.InvariantCulture),
+            members.Count(x => x.Source.Source.MaxFavorableTicks >= 500m).ToString(CultureInfo.InvariantCulture)
         }));
     }
 
