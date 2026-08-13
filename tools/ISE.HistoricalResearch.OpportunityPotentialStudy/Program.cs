@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using ISE.HistoricalResearch;
 
 if (args.Length != 1)
@@ -24,35 +22,57 @@ try
     var candidates = new MorningMarketStateAdaptiveAnalyzer().Analyze(bars);
     var potential = new MorningOpportunityPotentialAnalyzer();
     var observations = potential.Analyze(bars, candidates);
-    var buckets = potential.BuildBuckets(observations);
+    var quality = new MorningOpportunityQualityDiagnosticsAnalyzer();
+    var buckets = quality.BuildBuckets(observations);
+    var dimensions = quality.BuildDimensions(observations);
 
-    Console.WriteLine("ISE Elite V5 Opportunity Potential Study");
+    Console.WriteLine("ISE Elite V5.1 Opportunity Quality Diagnostic Study");
     Console.WriteLine($"Dataset: {path}");
     Console.WriteLine($"Bars: {bars.Count}");
     Console.WriteLine($"Candidate opportunities: {candidates.Count}");
     Console.WriteLine($"Scored observations: {observations.Count}");
     Console.WriteLine();
-    Console.WriteLine("bucket\tcount\tavgScore\tavgMFEticks\tavgMAEticks\tavgRealized\tpositiveRate\tMFE>=300\tMFE>=500");
+    Console.WriteLine("bucket\tcount\tavgScore\tavgMFE\tavgMAE\tavgRealized\tpositiveRate\tMFE/MAE\tMFE/Risk\tmoveAge\tconsumedFrac\texhaustRisk\taccel\tresets\tMFE>=300\tMFE>=500\t300+&MAE>=100\t500+&MAE>=100");
 
     foreach (var bucket in buckets)
     {
-        var members = MembersFor(bucket.Label, observations);
-        var avgScore = members.Count == 0 ? 0m : members.Average(x => x.PotentialScore);
-        var avgMae = members.Count == 0 ? 0m : members.Average(x => x.Source.MaxAdverseTicks);
-        var hit300 = members.Count(x => x.Source.MaxFavorableTicks >= 300m);
-        var hit500 = members.Count(x => x.Source.MaxFavorableTicks >= 500m);
-
         Console.WriteLine(string.Join("\t", new[]
         {
             bucket.Label,
             bucket.Count.ToString(CultureInfo.InvariantCulture),
-            avgScore.ToString("F1", CultureInfo.InvariantCulture),
+            bucket.AverageScore.ToString("F1", CultureInfo.InvariantCulture),
             bucket.AverageMfeTicks.ToString("F1", CultureInfo.InvariantCulture),
-            avgMae.ToString("F1", CultureInfo.InvariantCulture),
+            bucket.AverageMaeTicks.ToString("F1", CultureInfo.InvariantCulture),
             bucket.AverageRealizedDollars.ToString("F2", CultureInfo.InvariantCulture),
-            (bucket.PositiveOutcomeRate * 100m).ToString("F1", CultureInfo.InvariantCulture) + "%",
-            hit300.ToString(CultureInfo.InvariantCulture),
-            hit500.ToString(CultureInfo.InvariantCulture)
+            (bucket.PositiveRate * 100m).ToString("F1", CultureInfo.InvariantCulture) + "%",
+            bucket.AverageMfeMaeRatio.ToString("F2", CultureInfo.InvariantCulture),
+            bucket.AverageMfeRiskRatio.ToString("F2", CultureInfo.InvariantCulture),
+            bucket.AverageMoveAgeBars.ToString("F1", CultureInfo.InvariantCulture),
+            bucket.AverageConsumedFraction.ToString("F2", CultureInfo.InvariantCulture),
+            bucket.AverageExhaustionRisk.ToString("F2", CultureInfo.InvariantCulture),
+            bucket.AverageAccelerationRatio.ToString("F2", CultureInfo.InvariantCulture),
+            bucket.AveragePullbackResetCount.ToString("F2", CultureInfo.InvariantCulture),
+            bucket.Hit300.ToString(CultureInfo.InvariantCulture),
+            bucket.Hit500.ToString(CultureInfo.InvariantCulture),
+            bucket.Hit300WithMaeAtLeast100.ToString(CultureInfo.InvariantCulture),
+            bucket.Hit500WithMaeAtLeast100.ToString(CultureInfo.InvariantCulture)
+        }));
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("V5.1 diagnostic dimensions (outcome diagnostics only; not score inputs)");
+    Console.WriteLine("dimension\tvalue\tcount\tavgScore\tavgMFE\tavgMAE\tavgRealized");
+    foreach (var row in dimensions)
+    {
+        Console.WriteLine(string.Join("\t", new[]
+        {
+            row.Dimension,
+            row.Value,
+            row.Count.ToString(CultureInfo.InvariantCulture),
+            row.AverageScore.ToString("F1", CultureInfo.InvariantCulture),
+            row.AverageMfeTicks.ToString("F1", CultureInfo.InvariantCulture),
+            row.AverageMaeTicks.ToString("F1", CultureInfo.InvariantCulture),
+            row.AverageRealizedDollars.ToString("F2", CultureInfo.InvariantCulture)
         }));
     }
 
@@ -62,19 +82,4 @@ catch (Exception ex)
 {
     Console.Error.WriteLine(ex);
     return 1;
-}
-
-static List<MorningOpportunityPotentialObservation> MembersFor(string label, IReadOnlyList<MorningOpportunityPotentialObservation> observations)
-{
-    var bounds = label switch
-    {
-        "0-39" => (Min: 0m, MaxExclusive: 40m),
-        "40-54" => (Min: 40m, MaxExclusive: 55m),
-        "55-69" => (Min: 55m, MaxExclusive: 70m),
-        "70-84" => (Min: 70m, MaxExclusive: 85m),
-        "85-100" => (Min: 85m, MaxExclusive: 101m),
-        _ => throw new ArgumentOutOfRangeException(nameof(label))
-    };
-
-    return observations.Where(x => x.PotentialScore >= bounds.Min && x.PotentialScore < bounds.MaxExclusive).ToList();
 }
