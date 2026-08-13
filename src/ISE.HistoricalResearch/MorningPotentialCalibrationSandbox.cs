@@ -147,10 +147,10 @@ namespace ISE.HistoricalResearch
             HashSet<MorningOpportunityPotentialObservation>? highEntrySources = null;
             if (highEntryOnly)
             {
-                highEntrySources = entryObservations!
-                    .Where(x => MorningEntryEfficiencyAnalyzer.EntryBand(x.EntryEfficiencyScore) == "High")
-                    .Select(x => x.Source)
-                    .ToHashSet();
+                highEntrySources = new HashSet<MorningOpportunityPotentialObservation>(
+                    entryObservations!
+                        .Where(x => MorningEntryEfficiencyAnalyzer.EntryBand(x.EntryEfficiencyScore) == "High")
+                        .Select(x => x.Source));
             }
 
             var filtered = calibrated
