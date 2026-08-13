@@ -368,7 +368,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 .ToList();
         }
 
-        private static void PrintVolumeComparison(
+        private void PrintVolumeComparison(
             string label,
             DailyContractVolume comparison,
             string currentContract,
@@ -545,3 +545,4 @@ namespace NinjaTrader.NinjaScript.Indicators
         }
     }
 }
+
