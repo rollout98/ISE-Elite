@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -24,9 +24,9 @@ namespace ISE.HistoricalResearch
         BalancedReserve = 2
     }
 
-    public sealed class MorningDailySequencingConfig
+    public sealed class MorningDailyOpportunitySequencingConfig
     {
-        public MorningDailySequencingConfig(
+        public MorningDailyOpportunitySequencingConfig(
             int maximumAttempts = 2,
             decimal highEntryMinimum = 70m,
             decimal upperPotentialMinimum = 80m,
@@ -158,11 +158,11 @@ namespace ISE.HistoricalResearch
 
     public sealed class MorningDailyOpportunitySequencer
     {
-        private readonly MorningDailySequencingConfig config;
+        private readonly MorningDailyOpportunitySequencingConfig config;
 
-        public MorningDailyOpportunitySequencer(MorningDailySequencingConfig? config = null)
+        public MorningDailyOpportunitySequencer(MorningDailyOpportunitySequencingConfig? config = null)
         {
-            this.config = config ?? new MorningDailySequencingConfig();
+            this.config = config ?? new MorningDailyOpportunitySequencingConfig();
         }
 
         public IReadOnlyList<MorningDailySequencingCandidate> BuildCandidates(
@@ -337,3 +337,4 @@ namespace ISE.HistoricalResearch
         }
     }
 }
+
