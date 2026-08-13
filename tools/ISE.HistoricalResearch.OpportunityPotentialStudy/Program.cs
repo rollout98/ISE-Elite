@@ -24,25 +24,30 @@ try
     var potentialObservations = potential.Analyze(bars, candidates);
     var entry = new MorningEntryEfficiencyAnalyzer();
     var entryObservations = entry.Analyze(bars, potentialObservations);
-    var matrix = entry.BuildMatrix(entryObservations);
 
-    Console.WriteLine("ISE Elite V5.2 Potential x Entry Efficiency Study");
+    var sandbox = new MorningPotentialCalibrationSandbox();
+    var calibrated = sandbox.Analyze(potentialObservations);
+    var rows = sandbox.BuildRows(calibrated, highEntryOnly: true, entryObservations);
+
+    Console.WriteLine("ISE Elite V5.4 Potential Calibration Sandbox");
     Console.WriteLine($"Dataset: {path}");
     Console.WriteLine($"Bars: {bars.Count}");
     Console.WriteLine($"Candidate opportunities: {candidates.Count}");
     Console.WriteLine($"Potential observations: {potentialObservations.Count}");
     Console.WriteLine($"Entry-efficiency observations: {entryObservations.Count}");
+    Console.WriteLine("Scope: HIGH entry-efficiency only; June=calibration, July=validation");
     Console.WriteLine();
-    Console.WriteLine("potential\tentry\tdecision\tcount\tavgMFE\tavgMAE\tavgRealized\tpositiveRate\tMFE>=300\tMFE>=500");
+    Console.WriteLine("sample\tvariant\tscoreBand\tcount\tavgScore\tavgMFE\tavgMAE\tavgRealized\tpositiveRate\tMFE>=300\tMFE>=500");
 
-    foreach (var row in matrix)
+    foreach (var row in rows)
     {
         Console.WriteLine(string.Join("\t", new[]
         {
-            row.PotentialBand,
-            row.EntryBand,
-            row.DecisionClass.ToString(),
+            row.Sample,
+            row.Variant.ToString(),
+            row.ScoreBand,
             row.Count.ToString(CultureInfo.InvariantCulture),
+            row.AverageScore.ToString("F1", CultureInfo.InvariantCulture),
             row.AverageMfeTicks.ToString("F1", CultureInfo.InvariantCulture),
             row.AverageMaeTicks.ToString("F1", CultureInfo.InvariantCulture),
             row.AverageRealizedDollars.ToString("F2", CultureInfo.InvariantCulture),
@@ -53,28 +58,33 @@ try
     }
 
     Console.WriteLine();
-    Console.WriteLine("Decision-class summary");
-    Console.WriteLine("decision\tcount\tavgPotential\tavgEntry\tavgMFE\tavgMAE\tavgRealized\tpositiveRate\tMFE>=300\tMFE>=500");
+    Console.WriteLine("Upper-tier summary (80-89 plus 90-100, HIGH entry only)");
+    Console.WriteLine("sample\tvariant\tcount\tavgMFE\tavgMAE\tavgRealized\tpositiveRate\tMFE>=300\tMFE>=500");
 
-    foreach (MorningOpportunityDecisionClass decision in Enum.GetValues(typeof(MorningOpportunityDecisionClass)))
+    foreach (var sample in new[] { "JuneCalibration", "JulyValidation" })
     {
-        var members = entryObservations.Where(x => MorningEntryEfficiencyAnalyzer.DecisionFor(
-            MorningEntryEfficiencyAnalyzer.PotentialBand(x.PotentialScore),
-            MorningEntryEfficiencyAnalyzer.EntryBand(x.EntryEfficiencyScore)) == decision).ToList();
-
-        Console.WriteLine(string.Join("\t", new[]
+        foreach (MorningPotentialCalibrationVariant variant in Enum.GetValues(typeof(MorningPotentialCalibrationVariant)))
         {
-            decision.ToString(),
-            members.Count.ToString(CultureInfo.InvariantCulture),
-            (members.Count == 0 ? 0m : members.Average(x => x.PotentialScore)).ToString("F1", CultureInfo.InvariantCulture),
-            (members.Count == 0 ? 0m : members.Average(x => x.EntryEfficiencyScore)).ToString("F1", CultureInfo.InvariantCulture),
-            (members.Count == 0 ? 0m : members.Average(x => x.Source.Source.MaxFavorableTicks)).ToString("F1", CultureInfo.InvariantCulture),
-            (members.Count == 0 ? 0m : members.Average(x => x.Source.Source.MaxAdverseTicks)).ToString("F1", CultureInfo.InvariantCulture),
-            (members.Count == 0 ? 0m : members.Average(x => x.Source.Source.RealizedDollars)).ToString("F2", CultureInfo.InvariantCulture),
-            (members.Count == 0 ? 0m : 100m * members.Count(x => x.Source.Source.RealizedDollars > 0m) / members.Count).ToString("F1", CultureInfo.InvariantCulture) + "%",
-            members.Count(x => x.Source.Source.MaxFavorableTicks >= 300m).ToString(CultureInfo.InvariantCulture),
-            members.Count(x => x.Source.Source.MaxFavorableTicks >= 500m).ToString(CultureInfo.InvariantCulture)
-        }));
+            var members = calibrated
+                .Where(x => x.Variant == variant)
+                .Where(x => IsSample(x.Source.Source.SessionDateCentral, sample))
+                .Where(x => x.CalibratedScore >= 80m)
+                .Where(x => entryObservations.Any(e => ReferenceEquals(e.Source, x.Source) && MorningEntryEfficiencyAnalyzer.EntryBand(e.EntryEfficiencyScore) == "High"))
+                .ToList();
+
+            Console.WriteLine(string.Join("\t", new[]
+            {
+                sample,
+                variant.ToString(),
+                members.Count.ToString(CultureInfo.InvariantCulture),
+                (members.Count == 0 ? 0m : members.Average(x => x.Source.Source.MaxFavorableTicks)).ToString("F1", CultureInfo.InvariantCulture),
+                (members.Count == 0 ? 0m : members.Average(x => x.Source.Source.MaxAdverseTicks)).ToString("F1", CultureInfo.InvariantCulture),
+                (members.Count == 0 ? 0m : members.Average(x => x.Source.Source.RealizedDollars)).ToString("F2", CultureInfo.InvariantCulture),
+                (members.Count == 0 ? 0m : 100m * members.Count(x => x.Source.Source.RealizedDollars > 0m) / members.Count).ToString("F1", CultureInfo.InvariantCulture) + "%",
+                members.Count(x => x.Source.Source.MaxFavorableTicks >= 300m).ToString(CultureInfo.InvariantCulture),
+                members.Count(x => x.Source.Source.MaxFavorableTicks >= 500m).ToString(CultureInfo.InvariantCulture)
+            }));
+        }
     }
 
     return 0;
@@ -83,4 +93,11 @@ catch (Exception ex)
 {
     Console.Error.WriteLine(ex);
     return 1;
+}
+
+static bool IsSample(DateTime sessionDateCentral, string sample)
+{
+    if (sessionDateCentral.Year != 2026) return false;
+    return sample == "JuneCalibration" ? sessionDateCentral.Month == 6
+        : sample == "JulyValidation" && sessionDateCentral.Month == 7;
 }
