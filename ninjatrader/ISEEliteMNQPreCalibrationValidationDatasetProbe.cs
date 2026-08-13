@@ -1,11 +1,5 @@
 ﻿// Read-only NinjaTrader 8 probe for ISE Elite V7.8.2 expanded MNQ validation.
 //
-// V7.8.2 data-source correction:
-// - Repository is preferred.
-// - If Repository has missing/incomplete expired-contract coverage, Provider is queried.
-// - The source actually used for each selected day is preserved in the TSV.
-// - A Provider result is used only when it has better coverage than Repository.
-//
 // Purpose:
 // - acquire causal MNQ 1-minute data from 03:00-11:00 Central;
 // - include 2025-11-17 through 2025-11-30 as warmup/context only;
@@ -36,6 +30,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         private static readonly DateTime WarmupFromCentral =
             new DateTime(2025, 11, 17, 0, 0, 0, DateTimeKind.Unspecified);
 
+        private static readonly DateTime EvaluationFromCentral =
+            new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Unspecified);
+
         private static readonly DateTime ToCentralExclusive =
             new DateTime(2026, 3, 25, 0, 0, 0, DateTimeKind.Unspecified);
 
@@ -58,9 +55,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             new TimeSpan(11, 0, 0);
 
         private const int IntervalSeconds = 60;
-        private const int ExpectedBarsPerSession = 480;
-        private const int MinimumAcceptedBarsPerSession = 468;
-
         private const string TradingHoursTemplate =
             "CME US Index Futures ETH";
 
@@ -69,7 +63,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (State == State.SetDefaults)
             {
                 Description =
-                    "Read-only V7.8.2 causal MNQ pre-calibration validation dataset probe with Repository/Provider fallback.";
+                    "Read-only V7.8.2 causal MNQ pre-calibration validation dataset probe.";
 
                 Name =
                     "ISEEliteMNQPreCalibrationValidationDatasetProbe";
@@ -84,7 +78,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 started = true;
 
-                Print("ISE-V782-PRECAL LOADED");
+                Print(
+                    "ISE-V781-PRECAL LOADED");
+
                 Task.Run(Run);
             }
         }
@@ -94,9 +90,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             try
             {
                 Print(
-                    "ISE-V782-PRECAL START warmup=2025-11-17 evaluation=2025-12-01..2026-03-24"
-                    + " window=03:00-11:00 preferredSource=Repository fallbackSource=Provider"
-                    + " acquisition=daily-chunks selection=prior-completed-day-volume-leader");
+                    "ISE-V781-PRECAL START warmup=2025-11-17 evaluation=2025-12-01..2026-03-24 window=03:00-11:00 source=Repository acquisition=daily-chunks selection=prior-completed-day-volume-leader");
 
                 var client =
                     new ISEEliteHistoricalBarsRequestClient(
@@ -105,27 +99,28 @@ namespace NinjaTrader.NinjaScript.Indicators
                 var selected =
                     new List<ContractBar>();
 
-                var activeContract = "12-25";
+                var activeContract =
+                    "12-25";
 
-                DailyContractVolume previousDecember = null;
-                DailyContractVolume previousMarch = null;
+                DailyContractVolume previousDecember =
+                    null;
+
+                DailyContractVolume previousMarch =
+                    null;
 
                 DateTime? decemberSwitch = null;
                 DateTime? marchSwitch = null;
-
-                var repositoryDays = 0;
-                var providerDays = 0;
-                var skippedPartialDays = 0;
 
                 for (var day = WarmupFromCentral.Date;
                     day < ToCentralExclusive.Date;
                     day = day.AddDays(1))
                 {
-                    // Causal transition: today's contract is determined only
-                    // by yesterday's completed research-window volume.
+                    // Causal transition: use only the prior completed day's
+                    // volume comparison to determine today's contract.
                     if (activeContract == "12-25"
                         && previousDecember != null
-                        && previousDecember.NextVolume > previousDecember.CurrentVolume
+                        && previousDecember.NextVolume
+                            > previousDecember.CurrentVolume
                         && previousDecember.NextBars > 0)
                     {
                         activeContract = "03-26";
@@ -135,7 +130,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                             decemberSwitch = day;
 
                             Print(
-                                "ISE-V782-PRECAL SWITCH day="
+                                "ISE-V781-PRECAL SWITCH day="
                                 + day.ToString("yyyy-MM-dd")
                                 + " from=12-25 to=03-26 basedOn="
                                 + previousDecember.Date.ToString("yyyy-MM-dd")
@@ -148,7 +143,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                     if (activeContract == "03-26"
                         && previousMarch != null
-                        && previousMarch.NextVolume > previousMarch.CurrentVolume
+                        && previousMarch.NextVolume
+                            > previousMarch.CurrentVolume
                         && previousMarch.NextBars > 0)
                     {
                         activeContract = "06-26";
@@ -158,7 +154,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                             marchSwitch = day;
 
                             Print(
-                                "ISE-V782-PRECAL SWITCH day="
+                                "ISE-V781-PRECAL SWITCH day="
                                 + day.ToString("yyyy-MM-dd")
                                 + " from=03-26 to=06-26 basedOn="
                                 + previousMarch.Date.ToString("yyyy-MM-dd")
@@ -169,50 +165,28 @@ namespace NinjaTrader.NinjaScript.Indicators
                         }
                     }
 
-                    var current =
-                        RequestBestDay(
+                    var currentRecords =
+                        RequestDay(
                             client,
                             "MNQ " + activeContract,
                             day);
 
-                    if (current.Records.Count >= MinimumAcceptedBarsPerSession)
-                    {
-                        selected.AddRange(
-                            current.Records.Select(
-                                x => new ContractBar(
-                                    "MNQ",
-                                    activeContract,
-                                    current.Policy,
-                                    x)));
-
-                        if (current.Policy == NinjaTraderHistoricalLookupPolicy.Repository)
-                            repositoryDays++;
-                        else
-                            providerDays++;
-                    }
-                    else if (current.Records.Count > 0)
-                    {
-                        skippedPartialDays++;
-
-                        Print(
-                            "ISE-V782-PRECAL SKIP-PARTIAL date="
-                            + day.ToString("yyyy-MM-dd")
-                            + " contract="
-                            + activeContract
-                            + " bars="
-                            + current.Records.Count
-                            + " expected="
-                            + ExpectedBarsPerSession
-                            + " source="
-                            + current.Policy);
-                    }
+                    selected.AddRange(
+                        currentRecords.Select(
+                            x => new ContractBar(
+                                "MNQ",
+                                activeContract,
+                                x)));
 
                     if (day >= DecemberOverlapFrom
                         && day < DecemberOverlapToExclusive
                         && activeContract == "12-25")
                     {
-                        var next =
-                            RequestBestDay(
+                        var oldBars =
+                            currentRecords;
+
+                        var newBars =
+                            RequestDay(
                                 client,
                                 "MNQ 03-26",
                                 day);
@@ -220,26 +194,27 @@ namespace NinjaTrader.NinjaScript.Indicators
                         previousDecember =
                             new DailyContractVolume(
                                 day,
-                                current.Records.Count,
-                                current.Records.Sum(x => x.Volume),
-                                next.Records.Count,
-                                next.Records.Sum(x => x.Volume));
+                                oldBars.Count,
+                                oldBars.Sum(x => x.Volume),
+                                newBars.Count,
+                                newBars.Sum(x => x.Volume));
 
                         PrintVolumeComparison(
                             "DEC",
                             previousDecember,
                             "12-25",
-                            current.Policy,
-                            "03-26",
-                            next.Policy);
+                            "03-26");
                     }
 
                     if (day >= MarchOverlapFrom
                         && day < MarchOverlapToExclusive
                         && activeContract == "03-26")
                     {
-                        var next =
-                            RequestBestDay(
+                        var oldBars =
+                            currentRecords;
+
+                        var newBars =
+                            RequestDay(
                                 client,
                                 "MNQ 06-26",
                                 day);
@@ -247,18 +222,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                         previousMarch =
                             new DailyContractVolume(
                                 day,
-                                current.Records.Count,
-                                current.Records.Sum(x => x.Volume),
-                                next.Records.Count,
-                                next.Records.Sum(x => x.Volume));
+                                oldBars.Count,
+                                oldBars.Sum(x => x.Volume),
+                                newBars.Count,
+                                newBars.Sum(x => x.Volume));
 
                         PrintVolumeComparison(
                             "MAR",
                             previousMarch,
                             "03-26",
-                            current.Policy,
-                            "06-26",
-                            next.Policy);
+                            "06-26");
                     }
                 }
 
@@ -270,7 +243,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 if (selected.Count == 0)
                 {
                     throw new InvalidOperationException(
-                        "V7.8.2 pre-calibration acquisition selected zero bars from both Repository and Provider.");
+                        "V7.8.2 pre-calibration acquisition selected zero bars.");
                 }
 
                 ValidateUniqueTimestamps(selected);
@@ -281,12 +254,21 @@ namespace NinjaTrader.NinjaScript.Indicators
                         .OrderBy(x => x.Key)
                         .ToList();
 
+                var expectedBars =
+                    (int)(WindowEnd - WindowStart).TotalMinutes;
+
+                var partial =
+                    sessions
+                        .Where(x => x.Count() < expectedBars)
+                        .ToList();
+
                 var outputDirectory =
                     Path.Combine(
                         NinjaTrader.Core.Globals.UserDataDir,
                         "ISEEliteResearch");
 
-                Directory.CreateDirectory(outputDirectory);
+                Directory.CreateDirectory(
+                    outputDirectory);
 
                 var outputPath =
                     Path.Combine(
@@ -299,7 +281,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     ResolveCentralTimeZone());
 
                 Print(
-                    "ISE-V782-PRECAL RESULT selectedBars="
+                    "ISE-V781-PRECAL RESULT selectedBars="
                     + selected.Count
                     + " sessions="
                     + sessions.Count
@@ -311,12 +293,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                     + sessions.Min(x => x.Count())
                     + " maxBarsPerSession="
                     + sessions.Max(x => x.Count())
-                    + " repositoryDays="
-                    + repositoryDays
-                    + " providerDays="
-                    + providerDays
-                    + " skippedPartialDays="
-                    + skippedPartialDays
+                    + " partialSessions="
+                    + partial.Count
                     + " decemberSwitch="
                     + (decemberSwitch.HasValue
                         ? decemberSwitch.Value.ToString("yyyy-MM-dd")
@@ -326,78 +304,36 @@ namespace NinjaTrader.NinjaScript.Indicators
                         ? marchSwitch.Value.ToString("yyyy-MM-dd")
                         : "NONE"));
 
+                foreach (var p in partial)
+                {
+                    Print(
+                        "ISE-V781-PRECAL PARTIAL date="
+                        + p.Key.ToString("yyyy-MM-dd")
+                        + " bars="
+                        + p.Count());
+                }
+
                 Print(
-                    "ISE-V782-PRECAL FILE "
+                    "ISE-V781-PRECAL FILE "
                     + outputPath);
 
-                Print("ISE-V782-PRECAL COMPLETE");
+                Print(
+                    "ISE-V781-PRECAL COMPLETE");
             }
             catch (Exception ex)
             {
                 Print(
-                    "ISE-V782-PRECAL ERROR "
+                    "ISE-V781-PRECAL ERROR "
                     + ex.GetType().Name
                     + ": "
                     + ex.Message);
             }
         }
 
-        private DayBars RequestBestDay(
-            ISEEliteHistoricalBarsRequestClient client,
-            string instrumentFullName,
-            DateTime day)
-        {
-            var repository =
-                RequestDay(
-                    client,
-                    instrumentFullName,
-                    day,
-                    NinjaTraderHistoricalLookupPolicy.Repository);
-
-            if (repository.Count >= MinimumAcceptedBarsPerSession)
-            {
-                return new DayBars(
-                    repository,
-                    NinjaTraderHistoricalLookupPolicy.Repository);
-            }
-
-            var provider =
-                RequestDay(
-                    client,
-                    instrumentFullName,
-                    day,
-                    NinjaTraderHistoricalLookupPolicy.Provider);
-
-            if (provider.Count > repository.Count)
-            {
-                if (provider.Count > 0)
-                {
-                    Print(
-                        "ISE-V782-PRECAL SOURCE-FALLBACK date="
-                        + day.ToString("yyyy-MM-dd")
-                        + " instrument="
-                        + instrumentFullName
-                        + " repositoryBars="
-                        + repository.Count
-                        + " providerBars="
-                        + provider.Count);
-                }
-
-                return new DayBars(
-                    provider,
-                    NinjaTraderHistoricalLookupPolicy.Provider);
-            }
-
-            return new DayBars(
-                repository,
-                NinjaTraderHistoricalLookupPolicy.Repository);
-        }
-
         private static List<NinjaTraderHistoricalBarRecord> RequestDay(
             ISEEliteHistoricalBarsRequestClient client,
             string instrumentFullName,
-            DateTime day,
-            NinjaTraderHistoricalLookupPolicy policy)
+            DateTime day)
         {
             var nextDay =
                 day.AddDays(1);
@@ -409,7 +345,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         day,
                         nextDay,
                         IntervalSeconds,
-                        policy,
+                        NinjaTraderHistoricalLookupPolicy.Repository,
                         TradingHoursTemplate));
 
             if (records == null)
@@ -418,9 +354,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     "NinjaTrader historical client returned null for "
                     + instrumentFullName
                     + " "
-                    + day.ToString("yyyy-MM-dd")
-                    + " source="
-                    + policy);
+                    + day.ToString("yyyy-MM-dd"));
             }
 
             return records
@@ -434,31 +368,25 @@ namespace NinjaTrader.NinjaScript.Indicators
                 .ToList();
         }
 
-        private void PrintVolumeComparison(
+        private static void PrintVolumeComparison(
             string label,
             DailyContractVolume comparison,
             string currentContract,
-            NinjaTraderHistoricalLookupPolicy currentPolicy,
-            string nextContract,
-            NinjaTraderHistoricalLookupPolicy nextPolicy)
+            string nextContract)
         {
             Print(
-                "ISE-V782-PRECAL VOLUME "
+                "ISE-V781-PRECAL VOLUME "
                 + label
                 + " date="
                 + comparison.Date.ToString("yyyy-MM-dd")
                 + " current="
                 + currentContract
-                + " currentSource="
-                + currentPolicy
                 + " currentBars="
                 + comparison.CurrentBars
                 + " currentVolume="
                 + comparison.CurrentVolume
                 + " next="
                 + nextContract
-                + " nextSource="
-                + nextPolicy
                 + " nextBars="
                 + comparison.NextBars
                 + " nextVolume="
@@ -496,7 +424,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 foreach (var item in bars)
                 {
-                    var bar = item.Record;
+                    var bar =
+                        item.Record;
 
                     var local =
                         DateTime.SpecifyKind(
@@ -546,10 +475,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                                     CultureInfo.InvariantCulture),
                                 bar.Volume.ToString(
                                     CultureInfo.InvariantCulture),
-                                ((int)item.Policy).ToString(
-                                    CultureInfo.InvariantCulture),
-                                "NinjaTrader BarsRequest "
-                                    + item.Policy,
+                                "2",
+                                "NinjaTrader BarsRequest Repository",
                                 bar.Bid.HasValue
                                     ? bar.Bid.Value.ToString(
                                         CultureInfo.InvariantCulture)
@@ -577,37 +504,20 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        private sealed class DayBars
-        {
-            public DayBars(
-                List<NinjaTraderHistoricalBarRecord> records,
-                NinjaTraderHistoricalLookupPolicy policy)
-            {
-                Records = records;
-                Policy = policy;
-            }
-
-            public List<NinjaTraderHistoricalBarRecord> Records { get; }
-            public NinjaTraderHistoricalLookupPolicy Policy { get; }
-        }
-
         private sealed class ContractBar
         {
             public ContractBar(
                 string instrument,
                 string contract,
-                NinjaTraderHistoricalLookupPolicy policy,
                 NinjaTraderHistoricalBarRecord record)
             {
                 Instrument = instrument;
                 Contract = contract;
-                Policy = policy;
                 Record = record;
             }
 
             public string Instrument { get; }
             public string Contract { get; }
-            public NinjaTraderHistoricalLookupPolicy Policy { get; }
             public NinjaTraderHistoricalBarRecord Record { get; }
         }
 
