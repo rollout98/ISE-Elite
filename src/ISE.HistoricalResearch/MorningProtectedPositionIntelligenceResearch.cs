@@ -46,7 +46,8 @@ namespace ISE.HistoricalResearch
             int runnerTrailTicks = 250,
             decimal tickSize = 0.25m,
             decimal pointValuePerContract = 2m,
-            int contracts = 2)
+            int contracts = 2,
+            bool enablePreExtensionAdaptiveBreakeven = true)
         {
             if (vectorTimeframeMinutes < 1) throw new ArgumentOutOfRangeException(nameof(vectorTimeframeMinutes));
             if (ftcLength < 2 || ftcAtrLength < 2 || ftcAtrHighestLookback < 2) throw new ArgumentOutOfRangeException(nameof(ftcLength));
@@ -84,6 +85,7 @@ namespace ISE.HistoricalResearch
             TickSize = tickSize;
             PointValuePerContract = pointValuePerContract;
             Contracts = contracts;
+            EnablePreExtensionAdaptiveBreakeven = enablePreExtensionAdaptiveBreakeven;
         }
 
         public int VectorTimeframeMinutes { get; }
@@ -106,6 +108,13 @@ namespace ISE.HistoricalResearch
         public decimal TickSize { get; }
         public decimal PointValuePerContract { get; }
         public int Contracts { get; }
+
+        /// <summary>
+        /// Gets whether the V7.1 pre-extension +100-tick non-aligned breakeven rule is active.
+        /// Default true preserves V7.1 behavior. V7.3 sets this false for a one-variable ablation.
+        /// </summary>
+        public bool EnablePreExtensionAdaptiveBreakeven { get; }
+
         public decimal DollarsPerTick => TickSize * PointValuePerContract * Contracts;
     }
 
@@ -394,7 +403,9 @@ namespace ISE.HistoricalResearch
 
                 if (!extension)
                 {
-                    if (!aligned && mfe >= config.NonAlignedBreakevenTriggerTicks)
+                    if (config.EnablePreExtensionAdaptiveBreakeven
+                        && !aligned
+                        && mfe >= config.NonAlignedBreakevenTriggerTicks)
                     {
                         adaptiveBreakeven = true;
                         TightenStop(
@@ -900,3 +911,4 @@ namespace ISE.HistoricalResearch
         }
     }
 }
+
