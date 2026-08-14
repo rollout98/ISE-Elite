@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 if (args.Length != 1)
 {
@@ -77,6 +77,8 @@ static StudyResult Run(IReadOnlyList<Session> sessions, int targetTicks, int sto
         var zoneCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         var acceptedEntryTimes = new List<DateTime>();
 
+        // i=6 is sufficient for the signal's two five-bar lookbacks.
+        // EMA/ATR values were already computed causally on the continuous input stream.
         for (int i = 6; i < sb.Count - 1; i++)
         {
             var cooldownBars = governed ? 2 : 1;
@@ -159,6 +161,7 @@ static StudyResult Run(IReadOnlyList<Session> sessions, int targetTicks, int sto
                 bool hitTarget = signal.Direction > 0 ? bar.High >= target : bar.Low <= target;
                 bool hitStop = signal.Direction > 0 ? bar.Low <= stop : bar.High >= stop;
 
+                // Conservative same-bar ambiguity handling: if both were touched, assume the stop occurred first.
                 if (hitTarget && hitStop)
                 {
                     exitIndex = j;
@@ -254,9 +257,13 @@ static Signal SignalAt(IReadOnlyList<Bar> b, int i)
 
     decimal body = Math.Abs(x.Close - x.Open);
 
+    // Breakout range for the current bar: i-5 .. i-1.
     decimal prior5High = b.Skip(i - 5).Take(5).Max(z => z.High);
     decimal prior5Low = b.Skip(i - 5).Take(5).Min(z => z.Low);
 
+    // Repeated-breakout range for the PRIOR bar: i-6 .. i-2.
+    // The original baseline accidentally included p itself, which made
+    // p.Close > high (or p.Close < low) effectively impossible.
     decimal beforePrior5High = b.Skip(i - 6).Take(5).Max(z => z.High);
     decimal beforePrior5Low = b.Skip(i - 6).Take(5).Min(z => z.Low);
 
