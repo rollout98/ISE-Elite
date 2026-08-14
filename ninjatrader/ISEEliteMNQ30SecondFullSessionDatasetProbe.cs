@@ -1,5 +1,7 @@
 // Supervised, read-only NinjaTrader 8 contract-aware MNQ 30-second full-session dataset probe.
 // Created after V7.9.2 showed material one-minute target/stop sequencing ambiguity in the U.S. morning.
+// Local repository is preferred; missing 30-second days are retried through the configured historical provider.
+// NinjaTrader documents that Provider lookup updates the repository on provider reply.
 // No orders are submitted, changed, cancelled, or flattened by this probe.
 
 using System;
@@ -17,6 +19,9 @@ namespace NinjaTrader.NinjaScript.Indicators
     public sealed class ISEEliteMNQ30SecondFullSessionDatasetProbe : Indicator
     {
         private bool started;
+        private int providerFallbackRequests;
+        private int providerFallbackBars;
+        private int providerMisses;
 
         private static readonly DateTime WarmupFromTradingDayCentral = new DateTime(2026, 5, 28, 0, 0, 0, DateTimeKind.Unspecified);
         private static readonly DateTime ResearchFromTradingDayCentral = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Unspecified);
@@ -53,7 +58,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             try
             {
-                Print("ISE-30S-FULLSESSION-DATASET START warmupTradingDays=2026-05-28..2026-05-29 researchTradingDays=2026-06-01..2026-07-31 rolloverTradingDay=2026-06-15 session=17:00-prev-to-15:00 criticalWindow=06:00-11:00 interval=30s source=Repository acquisition=trading-day-chunks");
+                Print("ISE-30S-FULLSESSION-DATASET START warmupTradingDays=2026-05-28..2026-05-29 researchTradingDays=2026-06-01..2026-07-31 rolloverTradingDay=2026-06-15 session=17:00-prev-to-15:00 criticalWindow=06:00-11:00 interval=30s source=Repository->ProviderFallback acquisition=trading-day-chunks");
 
                 var client = new ISEEliteHistoricalBarsRequestClient(TimeSpan.FromSeconds(180));
                 var combined = new List<ContractBar>();
@@ -68,7 +73,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 combined = combined.OrderBy(x => x.Record.TimestampLocal).ToList();
                 if (combined.Count == 0)
-                    throw new InvalidOperationException("30-second full-session dataset selected zero bars.");
+                    throw new InvalidOperationException("30-second full-session dataset selected zero bars after Repository and Provider fallback. Verify the active historical-data connection supplies sub-minute/tick history for MNQ.");
 
                 ValidateUniqueTimestamps(combined);
 
@@ -91,7 +96,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                     + " lastObservedTradingDay=" + sessions[sessions.Count - 1].Key.ToString("yyyy-MM-dd")
                     + " minObservedBarsPerSession=" + sessions.Min(x => x.Count())
                     + " maxObservedBarsPerSession=" + sessions.Max(x => x.Count())
-                    + " partialCriticalSessions=" + partialCritical.Count);
+                    + " partialCriticalSessions=" + partialCritical.Count
+                    + " providerFallbackRequests=" + providerFallbackRequests
+                    + " providerFallbackBars=" + providerFallbackBars
+                    + " providerMisses=" + providerMisses);
 
                 foreach (var session in sessions)
                 {
@@ -121,6 +129,72 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
+        private List<NinjaTraderHistoricalBarRecord> RequestTradingSession(
+            ISEEliteHistoricalBarsRequestClient client,
+            string instrument,
+            DateTime tradingDay)
+        {
+            var sessionStart = tradingDay.Date.AddDays(-1).Add(SessionStartPreviousDay);
+            var sessionEnd = tradingDay.Date.Add(SessionEndTradingDay);
+            var records = new List<NinjaTraderHistoricalBarRecord>();
+
+            for (var day = sessionStart.Date; day <= tradingDay.Date; day = day.AddDays(1))
+            {
+                var nextDay = day.AddDays(1);
+                var requestRepository = new NinjaTraderHistoricalBarsRequest(
+                    instrument,
+                    day,
+                    nextDay,
+                    IntervalSeconds,
+                    NinjaTraderHistoricalLookupPolicy.Repository,
+                    TradingHoursTemplate);
+
+                var dayRecords = client.Request(requestRepository).ToList();
+
+                if (dayRecords.Count == 0)
+                {
+                    providerFallbackRequests++;
+                    Print("ISE-30S-FULLSESSION-DATASET REPOSITORY-MISS instrument=" + instrument
+                        + " calendarDay=" + day.ToString("yyyy-MM-dd")
+                        + " retry=Provider");
+
+                    var requestProvider = new NinjaTraderHistoricalBarsRequest(
+                        instrument,
+                        day,
+                        nextDay,
+                        IntervalSeconds,
+                        NinjaTraderHistoricalLookupPolicy.Provider,
+                        TradingHoursTemplate);
+
+                    dayRecords = client.Request(requestProvider).ToList();
+                    providerFallbackBars += dayRecords.Count;
+
+                    if (dayRecords.Count == 0)
+                    {
+                        providerMisses++;
+                        Print("ISE-30S-FULLSESSION-DATASET PROVIDER-MISS instrument=" + instrument
+                            + " calendarDay=" + day.ToString("yyyy-MM-dd"));
+                    }
+                    else
+                    {
+                        Print("ISE-30S-FULLSESSION-DATASET PROVIDER-BACKFILL instrument=" + instrument
+                            + " calendarDay=" + day.ToString("yyyy-MM-dd")
+                            + " bars=" + dayRecords.Count);
+                    }
+                }
+
+                records.AddRange(dayRecords);
+            }
+
+            return records
+                .Where(x => x.TimestampLocal >= sessionStart && x.TimestampLocal < sessionEnd)
+                .Where(x => x.TradingDay.Date == tradingDay.Date)
+                .GroupBy(x => x.TimestampLocal)
+                .Select(x => x.First())
+                .OrderBy(x => x.TimestampLocal)
+                .ToList();
+        }
+
         private static int CountCriticalBars(IEnumerable<ContractBar> session)
         {
             return session.Count(x => x.Record.TimestampLocal.TimeOfDay >= CriticalWindowStart
@@ -141,36 +215,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
             }
             return new GapSummary(count, max);
-        }
-
-        private static List<NinjaTraderHistoricalBarRecord> RequestTradingSession(
-            ISEEliteHistoricalBarsRequestClient client,
-            string instrument,
-            DateTime tradingDay)
-        {
-            var sessionStart = tradingDay.Date.AddDays(-1).Add(SessionStartPreviousDay);
-            var sessionEnd = tradingDay.Date.Add(SessionEndTradingDay);
-            var records = new List<NinjaTraderHistoricalBarRecord>();
-
-            for (var day = sessionStart.Date; day <= tradingDay.Date; day = day.AddDays(1))
-            {
-                var nextDay = day.AddDays(1);
-                records.AddRange(client.Request(new NinjaTraderHistoricalBarsRequest(
-                    instrument,
-                    day,
-                    nextDay,
-                    IntervalSeconds,
-                    NinjaTraderHistoricalLookupPolicy.Repository,
-                    TradingHoursTemplate)));
-            }
-
-            return records
-                .Where(x => x.TimestampLocal >= sessionStart && x.TimestampLocal < sessionEnd)
-                .Where(x => x.TradingDay.Date == tradingDay.Date)
-                .GroupBy(x => x.TimestampLocal)
-                .Select(x => x.First())
-                .OrderBy(x => x.TimestampLocal)
-                .ToList();
         }
 
         private static void ValidateUniqueTimestamps(IReadOnlyList<ContractBar> bars)
@@ -209,7 +253,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                         bar.Close.ToString(CultureInfo.InvariantCulture),
                         bar.Volume.ToString(CultureInfo.InvariantCulture),
                         "2",
-                        "NinjaTrader BarsRequest Repository",
+                        "NinjaTrader BarsRequest Repository/ProviderFallback",
                         bar.Bid.HasValue ? bar.Bid.Value.ToString(CultureInfo.InvariantCulture) : string.Empty,
                         bar.Ask.HasValue ? bar.Ask.Value.ToString(CultureInfo.InvariantCulture) : string.Empty
                     }));
