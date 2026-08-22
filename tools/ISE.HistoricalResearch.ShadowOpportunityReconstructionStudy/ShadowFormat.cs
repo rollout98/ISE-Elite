@@ -1,5 +1,3 @@
-global using static ShadowFormat;
-
 using System.Globalization;
 
 internal static class ShadowFormat
