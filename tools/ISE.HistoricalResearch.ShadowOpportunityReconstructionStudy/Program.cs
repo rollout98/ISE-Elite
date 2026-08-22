@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using ISE.HistoricalResearch;
+using static ShadowFormat;
 
 if (args.Length < 1 || args.Length > 2)
 {
@@ -256,7 +257,6 @@ static DateTimeOffset? FirstAdverseUtc(IReadOnlyList<HistoricalBar> bars, NewYor
 }
 
 static DateTime? ToCentral(DateTimeOffset? utc, TimeZoneInfo central) => utc.HasValue ? TimeZoneInfo.ConvertTime(utc.Value, central).DateTime : null;
-static string F(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
 static decimal Median(IEnumerable<decimal> values)
 {
     var a = values.OrderBy(x => x).ToList();
