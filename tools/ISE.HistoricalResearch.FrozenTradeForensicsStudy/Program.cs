@@ -56,7 +56,6 @@ var frozenCandidates = baselineCandidates
     .OrderBy(x => x.EntryUtc)
     .ToList();
 
-// This is the exact Fixed2 replay used by the V7.8.7 control study.
 var fixedReplay = new MorningRiskControlDecompositionAnalyzer(150m, 0.50m)
     .Replay(bars, frozenCandidates, MorningRiskControlPolicy.FixedTwo, 2, 70m, 80m);
 
@@ -159,9 +158,9 @@ Console.WriteLine($"rawCandidates={targetAll.Count}");
 Console.WriteLine($"baselineEligible={targetBaseline.Count}");
 Console.WriteLine($"frozenEligible={targetFrozen.Count}");
 Console.WriteLine($"selected={targetSelected.Count}");
-Console.WriteLine($"rejectedResetAge={candidateRows.Count(x => x.Disposition == \"RejectedResetAge\")}");
-Console.WriteLine($"rejectedPositionOpen={candidateRows.Count(x => x.Disposition == \"RejectedPositionOpen\")}");
-Console.WriteLine($"rejectedAttemptLimit={candidateRows.Count(x => x.Disposition == \"RejectedAttemptLimit\")}");
+Console.WriteLine("rejectedResetAge=" + candidateRows.Count(x => x.Disposition == "RejectedResetAge"));
+Console.WriteLine("rejectedPositionOpen=" + candidateRows.Count(x => x.Disposition == "RejectedPositionOpen"));
+Console.WriteLine("rejectedAttemptLimit=" + candidateRows.Count(x => x.Disposition == "RejectedAttemptLimit"));
 Console.WriteLine($"selectedPnL={F(targetSelected.Sum(x => x.RealizedDollars))}");
 Console.WriteLine($"selectedAverageMFE={F(lifecycleRows.Count == 0 ? 0m : lifecycleRows.Average(x => x.MfeTicks))}");
 Console.WriteLine($"averageCaptureRatio={F(lifecycleRows.Count == 0 ? 0m : lifecycleRows.Average(x => x.CaptureRatio))}");
@@ -173,9 +172,9 @@ foreach (var g in lifecycleRows.GroupBy(x => x.ExitReason).OrderBy(x => x.Key))
 Console.WriteLine();
 Console.WriteLine("DIAGNOSIS FLAGS");
 Console.WriteLine($"normalSelectedLoss={Yn(targetSelected.Any(x => x.RealizedDollars < 0m))}");
-Console.WriteLine($"profitableBaselineRejectedByResetAge={Yn(candidateRows.Any(x => x.Disposition == \"RejectedResetAge\" && x.SourceRealizedDollars > 0m))}");
+Console.WriteLine("profitableBaselineRejectedByResetAge=" + Yn(candidateRows.Any(x => x.Disposition == "RejectedResetAge" && x.SourceRealizedDollars > 0m)));
 Console.WriteLine($"baselineOpportunitiesPresent={Yn(targetBaseline.Count > 0)}");
-Console.WriteLine($"blockedByPositionOrAttempt={Yn(candidateRows.Any(x => x.Disposition is \"RejectedPositionOpen\" or \"RejectedAttemptLimit\"))}");
+Console.WriteLine("blockedByPositionOrAttempt=" + Yn(candidateRows.Any(x => x.Disposition == "RejectedPositionOpen" || x.Disposition == "RejectedAttemptLimit")));
 Console.WriteLine($"selectedMeaningfulMfeNotRetained={Yn(lifecycleRows.Any(x => x.MfeTicks >= 150m && x.RealizedTicks < x.MfeTicks * 0.50m))}");
 Console.WriteLine($"selectedRemainedScalp={Yn(lifecycleRows.Any(x => !x.ReachedCore))}");
 Console.WriteLine($"runnerReached={Yn(lifecycleRows.Any(x => x.ReachedRunner))}");
@@ -204,7 +203,6 @@ static string ClassifyDisposition(
     if (candidate.EntryEfficiencyScore < 70m) return "RejectedEntry";
     if (candidate.PotentialScore < 80m) return "RejectedPotential";
     if (baselineEligible && !frozenEligible) return "RejectedResetAge";
-
     if (selected.Any(x => ReferenceEquals(x.Candidate, candidate))) return "Selected";
     if (!frozenEligible) return "Rejected";
 
@@ -309,21 +307,24 @@ static void WriteSummary(string path, DateTime targetDate, string datasetPath, I
             totalPnl = lifecycle.Sum(x => x.RealizedDollars),
             coreCount = lifecycle.Count(x => x.ReachedCore),
             runnerCount = lifecycle.Count(x => x.ReachedRunner),
-            averageMfeTicks = lifecycle.Count == 0 ? 0m : lifecycle.Average(x => x.MfeTicks),
+            averageMfe = lifecycle.Count == 0 ? 0m : lifecycle.Average(x => x.MfeTicks),
             averageCaptureRatio = lifecycle.Count == 0 ? 0m : lifecycle.Average(x => x.CaptureRatio)
-        }
+        },
+        candidates,
+        lifecycle
     };
+
     File.WriteAllText(path, JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
 }
+
+static string Yn(bool value) => value ? "yes" : "no";
+static string F(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
 
 static TimeZoneInfo ResolveCentralTimeZone()
 {
     try { return TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time"); }
     catch (TimeZoneNotFoundException) { return TimeZoneInfo.FindSystemTimeZoneById("America/Chicago"); }
 }
-
-static string F(decimal value) => value.ToString("F2", CultureInfo.InvariantCulture);
-static string Yn(bool value) => value ? "Y" : "N";
 
 sealed class CandidateRow
 {
