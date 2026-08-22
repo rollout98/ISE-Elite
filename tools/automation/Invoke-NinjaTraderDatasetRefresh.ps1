@@ -38,7 +38,11 @@ try {
     $through = Get-LatestCompletedWeekday $NowCentral
     $requestId = [guid]::NewGuid().ToString('N')
     $requestTemp = $requestPath + '.' + $requestId + '.tmp'
-    [IO.File]::WriteAllLines($requestTemp, @('requestId' + "`t" + 'throughCentral', $requestId + "`t" + $through.ToString('yyyy-MM-dd')), [Text.UTF8Encoding]::new($false))
+    [string[]]$requestLines = @(
+        ('requestId' + "`t" + 'throughCentral')
+        ($requestId + "`t" + $through.ToString('yyyy-MM-dd'))
+    )
+    [IO.File]::WriteAllLines($requestTemp, $requestLines, [Text.UTF8Encoding]::new($false))
     Move-Item -LiteralPath $requestTemp -Destination $requestPath -Force
     Write-Host "DATASET REFRESH REQUEST requestId=$requestId through=$($through.ToString('yyyy-MM-dd'))"
 

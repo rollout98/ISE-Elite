@@ -29,6 +29,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private Timer pollTimer;
         private int running;
         private string lastRequestId;
+        private string lastRejectedRequestFingerprint;
 
         protected override void OnStateChange()
         {
@@ -60,7 +61,21 @@ namespace NinjaTrader.NinjaScript.Indicators
                 var root = Path.Combine(NinjaTrader.Core.Globals.UserDataDir, "ISEEliteResearch");
                 var requestPath = Path.Combine(root, "mnq-refresh.request.tsv");
                 if (!File.Exists(requestPath)) return;
-                var request = ReadRequest(requestPath);
+                var fingerprint = Sha256(requestPath);
+                if (fingerprint == lastRejectedRequestFingerprint) return;
+                RefreshRequest request;
+                try
+                {
+                    request = ReadRequest(requestPath);
+                    lastRejectedRequestFingerprint = null;
+                }
+                catch (Exception ex)
+                {
+                    lastRejectedRequestFingerprint = fingerprint;
+                    Print("ISE-DATA-REFRESH POLL-ERROR fingerprint=" + fingerprint + " " + ex.Message
+                        + " Further errors for this unchanged request are suppressed.");
+                    return;
+                }
                 if (request.Id == lastRequestId) return;
                 if (Interlocked.CompareExchange(ref running, 1, 0) != 0) return;
                 lastRequestId = request.Id;
@@ -187,11 +202,63 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private static RefreshRequest ReadRequest(string path)
         {
-            var lines = File.ReadAllLines(path);
-            if (lines.Length != 2 || lines[0] != "requestId\tthroughCentral") throw new InvalidOperationException("Invalid refresh request format.");
-            var fields = lines[1].Split('\t');
-            if (fields.Length != 2 || string.IsNullOrWhiteSpace(fields[0])) throw new InvalidOperationException("Invalid refresh request values.");
-            return new RefreshRequest(fields[0], DateTime.ParseExact(fields[1], "yyyy-MM-dd", CultureInfo.InvariantCulture));
+            var raw = File.ReadAllText(path);
+            var lines = raw
+                .Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None)
+                .Select(x => x.Trim().TrimStart('\uFEFF'))
+                .Where(x => x.Length > 0)
+                .ToArray();
+
+            if (lines.Length != 2)
+                throw InvalidRequest("expected exactly 2 nonblank TSV rows but read " + lines.Length, raw, lines);
+
+            var header = SplitFields(lines[0]);
+            if (header.Length != 2)
+                throw InvalidRequest("header has " + header.Length + " fields; expected 2", raw, lines);
+            if (!string.Equals(header[0], "requestId", StringComparison.Ordinal)
+                || !string.Equals(header[1], "throughCentral", StringComparison.Ordinal))
+                throw InvalidRequest("header columns were [" + string.Join(", ", header.Select(Visible))
+                    + "]; expected [requestId, throughCentral]", raw, lines);
+
+            var values = SplitFields(lines[1]);
+            if (values.Length != 2)
+                throw InvalidRequest("data row has " + values.Length + " fields; expected 2", raw, lines);
+
+            Guid parsedId;
+            if (!Guid.TryParseExact(values[0], "N", out parsedId))
+                throw InvalidRequest("requestId must be 32 hexadecimal characters; read " + Visible(values[0]), raw, lines);
+
+            DateTime through;
+            if (!DateTime.TryParseExact(values[1], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out through))
+                throw InvalidRequest("throughCentral must use yyyy-MM-dd; read " + Visible(values[1]), raw, lines);
+            if (through.Date < FromCentral.Date)
+                throw InvalidRequest("throughCentral precedes supported start 2026-08-10; read " + Visible(values[1]), raw, lines);
+
+            return new RefreshRequest(parsedId.ToString("N"), through);
+        }
+
+        private static string[] SplitFields(string line)
+        {
+            return line.Split('\t').Select(x => x.Trim().TrimStart('\uFEFF')).ToArray();
+        }
+
+        private static InvalidOperationException InvalidRequest(string reason, string raw, string[] lines)
+        {
+            return new InvalidOperationException("Invalid refresh request: " + reason
+                + "; bytes=" + Encoding.UTF8.GetByteCount(raw)
+                + "; rows=" + lines.Length
+                + "; raw=" + Visible(raw));
+        }
+
+        private static string Visible(string value)
+        {
+            var shown = (value ?? "")
+                .Replace("\uFEFF", "<BOM>")
+                .Replace("\t", "<TAB>")
+                .Replace("\r", "<CR>")
+                .Replace("\n", "<LF>");
+            if (shown.Length > 512) shown = shown.Substring(0, 512) + "...";
+            return "'" + shown + "'";
         }
 
         private static void WriteDataset(string path, IList<SelectedBar> bars, TimeZoneInfo central)
