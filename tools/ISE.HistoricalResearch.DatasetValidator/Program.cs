@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using ISE.HistoricalResearch;
 
 namespace ISE.HistoricalResearch.DatasetValidator
@@ -7,9 +8,9 @@ namespace ISE.HistoricalResearch.DatasetValidator
     {
         private static int Main(string[] args)
         {
-            if (args.Length != 1)
+            if (args.Length != 1 && args.Length != 3)
             {
-                Console.Error.WriteLine("Usage: dotnet run --project tools/ISE.HistoricalResearch.DatasetValidator -- <path-to-tsv>");
+                Console.Error.WriteLine("Usage: dotnet run --project tools/ISE.HistoricalResearch.DatasetValidator -- <path-to-tsv> [session-start-HH:mm session-end-HH:mm]");
                 return 2;
             }
 
@@ -18,12 +19,20 @@ namespace ISE.HistoricalResearch.DatasetValidator
                 var store = new HistoricalDataFileStore();
                 var bars = store.ReadContractAware(args[0]);
                 var validator = new ContractAwareHistoricalDatasetValidator();
-                var report = validator.BuildCoverageReport(bars, TimeSpan.FromHours(6), TimeSpan.FromHours(11));
+                var sessionStart = args.Length == 3
+                    ? TimeSpan.ParseExact(args[1], @"hh\:mm", CultureInfo.InvariantCulture)
+                    : TimeSpan.FromHours(6);
+                var sessionEnd = args.Length == 3
+                    ? TimeSpan.ParseExact(args[2], @"hh\:mm", CultureInfo.InvariantCulture)
+                    : TimeSpan.FromHours(11);
+                var report = validator.BuildCoverageReport(bars, sessionStart, sessionEnd);
 
                 Console.WriteLine("ISE-DATASET-VALIDATION RESULT"
                     + " instrument=" + report.Instrument
                     + " intervalSeconds=" + report.IntervalSeconds
                     + " bars=" + report.BarCount
+                    + " sessionStartCentral=" + sessionStart.ToString(@"hh\:mm", CultureInfo.InvariantCulture)
+                    + " sessionEndCentral=" + sessionEnd.ToString(@"hh\:mm", CultureInfo.InvariantCulture)
                     + " sessions=" + report.SessionCount
                     + " completeSessions=" + report.CompleteSessionCount
                     + " partialSessions=" + report.PartialSessionCount
